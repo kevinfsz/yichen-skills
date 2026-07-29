@@ -23,6 +23,15 @@ description: 批量导出小红书、抖音与 X/Twitter 的私人收藏或书�
 | 抖音 | 已登录 Chrome 的 `user/self?showTab=favorite_collection` → 收藏 → 视频 | 复用当前 Chrome 页面会话，不导出 Cookie | 规范化 `/video/<id>` 与页面实际出现的 `/note/<id>` |
 | X | 本机 `ft` 读取 Chrome 会话 Cookie并调用内部 GraphQL Bookmarks | Field Theory GraphQL-only | `https://x.com/<author>/status/<id>` |
 
+## 第三方来源与合规
+
+1. X 路线调用外部 [afar1/fieldtheory-cli](https://github.com/afar1/fieldtheory-cli)；上游采用 MIT License，许可证副本见仓库 `licenses/afar1-fieldtheory-cli-LICENSE.txt`。
+2. 本 Skill 没有复制或打包 Field Theory 源码、二进制、Cookie、私有 Query ID 或认证数据；这里只通过命令行调用用户另行安装的 `ft`。
+3. `graphql-only` 是本 Skill 对兼容版本的安全约束，不是上游官方版本名称。若用户自行修改 Field Theory，必须保留上游版权和 MIT 许可说明，不得把修改版冒充上游官方发布。
+4. X 内部 GraphQL、页面 DOM 与平台接口都属于非官方兼容路线，可能变化或触发平台限制。仅处理用户本人有权访问的数据，保持低频，不绕过验证码、访问控制、限流或平台安全措施。
+5. 小红书、抖音和 X 的名称及商标归各自权利人所有；本 Skill 与这些平台及 Field Theory 上游均无隶属、授权、背书或合作关系。
+6. `chrome:control-chrome` 是宿主 Agent 环境提供的浏览器能力，不由本 Skill 仓库分发。按需调用的其他下载 Skill 需分别遵守其自身许可证和平台规则。
+
 ## 执行流程
 
 ### 1. 确认范围与输出目录

@@ -459,14 +459,21 @@ The isolated Grok Build search design in `yichen-grok-consult` was informed by:
 
 - [`sudoHG/codex-grok-search`](https://github.com/sudoHG/codex-grok-search) — MIT-licensed public reference; no source code is vendored here
 
+The X bookmark route in `yichen-social-bookmarks-exporter` calls:
+
+- [`afar1/fieldtheory-cli`](https://github.com/afar1/fieldtheory-cli) — MIT-licensed optional external runtime; no Field Theory source or binary is vendored here
+- The required `graphql-only` marker refers to a user-maintained modified build, not an official upstream release name; that build is not distributed by this repository
+
 See `THIRD_PARTY_NOTICES.md` for details.
 
 ## Compliance Boundary
 
-- This project is not affiliated with, endorsed by, or sponsored by X, xAI, OpenAI, WeChat, or Tencent.
+- This project is not affiliated with, endorsed by, or sponsored by X, xAI, OpenAI, WeChat, Tencent, Xiaohongshu, Douyin, or Field Theory.
 - This repository is for personal learning and non-commercial personal workflow use only.
 - Commercial use, client delivery, resale, paid redistribution, marketplace packaging, course bundling, and internal company deployment are prohibited without prior written permission.
 - Users are responsible for complying with X platform terms/policies and local laws.
+- Collection-export workflows are only for data the user is authorized to access; do not bypass access controls, CAPTCHA, rate limits, or platform security measures.
+- X internal GraphQL and platform-DOM routes are unofficial compatibility methods and may change or trigger platform controls.
 - `yichen-wechat-local-vault` is for personal use only — only decrypt and read your own chat data.
 - `yichen-wecom-local-vault` is for owner-authorized local data only — never upload keys, plaintext snapshots, or chat exports.
 - Never upload real account credentials (for example, `cookies.json`, `wechat-keys.json`) to public repositories.

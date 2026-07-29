@@ -458,14 +458,21 @@ rm -f /tmp/x_current_cookies.json
 
 - [`sudoHG/codex-grok-search`](https://github.com/sudoHG/codex-grok-search) — MIT 许可的公开参考；本仓库未复制其源码
 
+`yichen-social-bookmarks-exporter` 的 X 书签路线调用：
+
+- [`afar1/fieldtheory-cli`](https://github.com/afar1/fieldtheory-cli) — MIT 许可的可选外部运行时；本仓库未打包 Field Theory 源码或二进制
+- 所要求的 `graphql-only` 标识指用户自行维护的修改版，不是上游官方发布名称；该修改版未在本仓库分发
+
 详细说明见 `THIRD_PARTY_NOTICES.md`。
 
 ## 合规边界
 
-- 本项目与 X、xAI、OpenAI、微信或腾讯官方无隶属、背书或合作关系。
+- 本项目与 X、xAI、OpenAI、微信、腾讯、小红书、抖音或 Field Theory 上游无隶属、背书或合作关系。
 - 本仓库仅限个人学习和非商业个人工作流使用。
 - 未经作者书面许可，禁止商用、客户交付、转售、付费分发、市场打包、课程打包或公司内部部署。
 - 使用者需自行遵守 X 平台条款、自动化政策及当地法律法规。
+- 收藏导出只可用于用户本人有权访问的数据；不得绕过访问控制、验证码、限流或平台安全措施。
+- X 内部 GraphQL 和平台 DOM 抓取均为非官方兼容路线，可能变化或触发平台限制。
 - `yichen-wechat-local-vault` 仅限个人使用——仅可解密和读取本人的聊天数据，不得用于侵犯他人隐私。
 - `yichen-wecom-local-vault` 仅限 owner 授权的本地数据；绝不上传 key、明文快照或聊天导出。
 - 请勿把真实账号凭据（如 `cookies.json`、`wechat-keys.json`）上传到公开仓库。

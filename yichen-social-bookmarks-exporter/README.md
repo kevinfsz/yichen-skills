@@ -18,6 +18,24 @@ Export the currently accessible Xiaohongshu favorites, Douyin favorites, and X b
 
 The X route is an optional external dependency. This repository does not include Field Theory, private query IDs, cookies, or credentials.
 
+## Third-party attribution
+
+- Field Theory CLI: [afar1/fieldtheory-cli](https://github.com/afar1/fieldtheory-cli)
+- Upstream license: MIT
+- Local license copy: [`../licenses/afar1-fieldtheory-cli-LICENSE.txt`](../licenses/afar1-fieldtheory-cli-LICENSE.txt)
+- Integration type: optional external command-line runtime; no Field Theory source code or binary is vendored in this repository
+
+The required `graphql-only` version marker identifies a user-maintained compatibility and safety overlay. It is not an official upstream Field Theory release name, and that modified runtime is not distributed here. Modified Field Theory builds must retain the upstream copyright and MIT license notice and must not be represented as official upstream releases.
+
+## Platform compliance
+
+- Use the workflow only for collections and bookmarks the user is authorized to access.
+- Keep requests low-frequency and do not bypass access controls, CAPTCHA, rate limits, or platform security measures.
+- X internal GraphQL and page-DOM collection are unofficial compatibility routes and may stop working or trigger platform controls.
+- Users remain responsible for current platform terms and applicable laws.
+- Xiaohongshu, Douyin, X, and Field Theory names belong to their respective owners. This project is not affiliated with or endorsed by them.
+- `chrome:control-chrome` is supplied by the host agent environment and is not distributed by this repository.
+
 ## Files
 
 - `SKILL.md`: workflow and safety rules
@@ -59,4 +77,4 @@ The X command refuses to overwrite an existing file unless `--overwrite` is pass
 
 ## License
 
-See the repository-level license.
+Original files in this Skill follow the repository-level license. Field Theory remains under its upstream MIT License; see the attribution and license copy above.

@@ -1,6 +1,6 @@
 ﻿# THIRD_PARTY_NOTICES
 
-Last updated: 2026-07-24
+Last updated: 2026-07-29
 
 This repository references and adapts ideas/workflows from external projects.
 
@@ -81,6 +81,22 @@ This repository references and adapts ideas/workflows from external projects.
   - No Grok Build binary, xAI credential, authentication file, or xAI source code is included.
   - Users install and authenticate the CLI separately under xAI's current terms and documentation.
 
+## 8) afar1/fieldtheory-cli
+
+- Upstream: https://github.com/afar1/fieldtheory-cli
+- License: MIT
+- Local license copy: `licenses/afar1-fieldtheory-cli-LICENSE.txt`
+- Usage in this repo (`yichen-social-bookmarks-exporter`):
+  - Optional external runtime for syncing X bookmarks and reading the user's local Field Theory index through `ft list --json`.
+  - The Skill requires a compatible build whose version contains `graphql-only` before it will export X links.
+- What was copied:
+  - No Field Theory source code, binary, private Query ID, Cookie, credential, or bookmark data is vendored in this repository.
+  - `export_x_links.py` is an independently implemented URL-only adapter that invokes the separately installed `ft` command.
+- Modification status:
+  - `graphql-only` identifies a user-maintained compatibility and safety overlay, not an official upstream Field Theory release name.
+  - The modified runtime is not distributed in this repository.
+  - Any redistribution of a modified Field Theory build must preserve the upstream MIT copyright and license notice and must not be represented as an official upstream release.
+
 ## Notes
 
 - This repository maintains its own license (`LICENSE`) for original contributions. It is personal-learning and non-commercial only.
@@ -91,5 +107,6 @@ This repository references and adapts ideas/workflows from external projects.
 - `yichen-x-article-draft-uploader` references workflow and Markdown parsing ideas from `wshuyi/x-article-publisher-skill`; it stores no real credentials and writes cookies only to temporary runtime files.
 - `yichen-summary` and the broader skill packaging conventions reference public Claude skill community practices, including JimLiu/baoyu-skills.
 - `yichen-grok-consult` references the public isolation pattern from `sudoHG/codex-grok-search`, but includes an independently implemented MCP server and deterministic verification layer.
+- `yichen-social-bookmarks-exporter` calls Field Theory as an optional external runtime; Field Theory remains under its upstream MIT License, while this repository's independently implemented adapter remains under this repository's license.
 - `yichen-mac-wechat-dual-open` references public X/Twitter discussion and implements the copy + bundle-id + ad-hoc signing workflow locally.
 - Do not remove this file when forking for personal study. It is the attribution record for borrowed ideas, workflows, and license notices.
