@@ -21,6 +21,11 @@
 13. 只读解析并导出本机企业微信 5.x 数据库快照，不操控客户端（`yichen-wecom-local-vault`）
 14. 在 GPT 主导的 Codex 对话中调用 Grok 原生搜索 X 或提供第二意见，不切换主模型（`yichen-grok-consult`）
 15. 只读导出小红书收藏、抖音收藏与 X 书签链接，并做数量和格式核验（`yichen-social-bookmarks-exporter`）
+16. 用一个安全优先的总入口编排跨阶段互联网研究（`yichen-web-research`）
+17. 把公共网页和平台搜索统一成可核验候选（`yichen-unified-search`）
+18. 只读取、下载和归档已知或已确认链接（`yichen-content-archive`）
+19. 用当轮授权闸门包装私人收藏导出（`yichen-bookmarks-export`）
+20. 在 Step 与豆包/火山 ASR 之间安全路由并避免重复提交（`yichen-asr`）
 
 ## 包含的技能
 
@@ -151,6 +156,49 @@ Mac 微信双开——无需第三方工具，一条命令搞定：
 
 安装、依赖和隐私边界见 [yichen-social-bookmarks-exporter/README.md](./yichen-social-bookmarks-exporter/README.md)。
 
+### 16) `yichen-web-research`
+
+跨搜索、候选确认、归档和按需转写的研究总路由：
+
+- 单阶段任务直接交给对应子 Skill
+- 搜索结果不会自动进入下载
+- 强制社交平台只读、目标级授权和禁止操控微信 UI
+- 自带可移植、只读的后端体检脚本
+
+完整家族、可选后端和配置说明见 [yichen-web-research/README.md](./yichen-web-research/README.md)。
+
+### 17) `yichen-unified-search`
+
+公共网页与平台适配器的纯搜索编排：
+
+- 覆盖 AnySearch、GitHub、微信公众号公共搜索、小红书、抖音、今日头条、X、B站、YouTube 和小宇宙
+- 输出带来源、覆盖范围和限制说明的标准候选
+- 浏览器登录态搜索必须先取得当轮授权
+
+### 18) `yichen-content-archive`
+
+已知链接与精确容器处理：
+
+- 读取并归档已确认的网页、小红书、抖音、公众号、YouTube、B站和小宇宙目标
+- 搜索与开放式发现不进入归档层
+- 使用不冲突输出目录、续跑检查点和显式覆盖保护
+
+### 19) `yichen-bookmarks-export`
+
+`yichen-social-bookmarks-exporter` 的安全包装层：
+
+- 每个平台和范围都要求当前任务明确授权
+- 只导出链接，不把授权自动转移到下载
+- 交接文件只引用本地文件，不内嵌私人 URL
+
+### 20) `yichen-asr`
+
+统一 ASR 路由：
+
+- 纯文本默认走兼容 Step 执行器，时间戳/SRT 默认走 `yichen-volc-asr`
+- App ID 与 Token 只从环境变量读取
+- 已经提交到某服务商的任务不会静默改投另一家
+
 ## 目录结构
 
 ```text
@@ -223,6 +271,35 @@ yichen-skills/
 │  ├─ agents/
 │  ├─ references/
 │  └─ scripts/
+├─ yichen-web-research/
+│  ├─ SKILL.md
+│  ├─ README.md
+│  ├─ agents/
+│  ├─ scripts/
+│  └─ tests/
+├─ yichen-unified-search/
+│  ├─ SKILL.md
+│  ├─ agents/
+│  ├─ references/
+│  ├─ scripts/
+│  └─ tests/
+├─ yichen-content-archive/
+│  ├─ SKILL.md
+│  ├─ agents/
+│  ├─ references/
+│  ├─ scripts/
+│  └─ tests/
+├─ yichen-bookmarks-export/
+│  ├─ SKILL.md
+│  ├─ agents/
+│  ├─ references/
+│  └─ tests/
+├─ yichen-asr/
+│  ├─ SKILL.md
+│  ├─ agents/
+│  ├─ references/
+│  ├─ scripts/
+│  └─ tests/
 ├─ .agents/plugins/
 │  └─ marketplace.json
 ├─ plugins/yichen-grok-consult/
@@ -256,6 +333,7 @@ yichen-skills/
   - 企业微信本地解析：`pycryptodome`；只有明确授权抓取本机 raw key 时才需要 `frida`
   - Grok Consult：Node.js 18+、官方 Grok Build CLI 和有效的 `grok login`；非搜索咨询工具可选依赖本机 OpenCodex
   - 社交收藏夹导出：小红书/抖音需要 Agent 环境支持 `chrome:control-chrome`；X 路线可选依赖版本标识包含 `graphql-only` 的 Field Theory `ft` CLI
+  - Web Research 家族：五个家族目录必须一起安装；可选覆盖依赖 AnySearch、OpenCLI、Grok CLI、`xreach`、`gh`、`yt-dlp`、`bili`、`ffmpeg` 和其 README 中列出的配套 Skills
 
 ## 安装方式
 
@@ -280,6 +358,11 @@ yichen-skills/
 - `yichen-wechat-mp-batch-exporter`
 - `yichen-wecom-local-vault`
 - `yichen-social-bookmarks-exporter`
+- `yichen-web-research`
+- `yichen-unified-search`
+- `yichen-content-archive`
+- `yichen-bookmarks-export`
+- `yichen-asr`
 
 `yichen-grok-consult` 是 Codex 插件，不是只复制目录即可工作的普通 Skill。请通过本仓库的 marketplace 安装：
 
@@ -372,6 +455,14 @@ codex plugin add yichen-grok-consult@yichen-skills
 4. 明确指定本轮授权的平台、导出范围和输出目录
 5. Skill 只导出链接并做核验，不会自动下载媒体或修改收藏状态
 
+### L）启用 Web Research 家族
+
+1. 一起安装 `yichen-web-research`、`yichen-unified-search`、`yichen-content-archive`、`yichen-bookmarks-export` 和 `yichen-asr`
+2. 只安装目标平台实际需要的可选后端
+3. 运行 `python3 yichen-web-research/scripts/validate_family.py`
+4. 多阶段任务从 `$yichen-web-research` 开始；纯搜索、已知链接归档、收藏导出或本地 ASR 可直接调用对应子 Skill
+5. 启用账号登录态或付费 ASR 路线前先阅读 [yichen-web-research/README.md](./yichen-web-research/README.md)
+
 ## X Cookie 处理
 
 本仓库不包含真实凭据，也不再提供需要手动填写的 cookie 模板。
@@ -398,6 +489,7 @@ rm -f /tmp/x_current_cookies.json
 - 第三方 AppID、AppToken、TableID、bucket 名和 ASR token 必须通过环境变量或私有配置提供
 - 公众号 exporter auth-key、凭证文件、扫码登录秘密、捕获 cookies 和下载的文章归档必须只保存在本地
 - `yichen-grok-consult` 不包含固定代理或凭证；但查询和结果仍会发送给 xAI，并保存在隔离的本机会话目录
+- Web Research 家族不包含个人绝对路径、App ID、Token、固定钥匙串项或私人代理值；账号路线仍必须显式启用
 
 如果你曾在公开仓库暴露过 Cookie，请立即轮换。
 

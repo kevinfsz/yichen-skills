@@ -21,6 +21,11 @@ A skill collection for creators who want to streamline writing, X Articles draft
 13. Read and export local WeCom/企业微信 5.x database snapshots without controlling the app (`yichen-wecom-local-vault`)
 14. Let GPT call Grok for native X search or an independent second opinion without switching the main model (`yichen-grok-consult`)
 15. Export Xiaohongshu favorites, Douyin favorites, and X bookmarks as validated local URL files (`yichen-social-bookmarks-exporter`)
+16. Route multi-stage internet research through one safety-first entry point (`yichen-web-research`)
+17. Normalize public web and platform search into reviewable candidates (`yichen-unified-search`)
+18. Read, download, and archive only known or explicitly confirmed links (`yichen-content-archive`)
+19. Gate private bookmark export behind current-task authorization (`yichen-bookmarks-export`)
+20. Choose between Step and Doubao/Volcengine ASR without duplicate submissions (`yichen-asr`)
 
 ## Included Skills
 
@@ -152,6 +157,49 @@ Read-only export for the currently accessible private collections on three platf
 
 See [yichen-social-bookmarks-exporter/README.md](./yichen-social-bookmarks-exporter/README.md) for installation, dependencies, and privacy boundaries.
 
+### 16) `yichen-web-research`
+
+Top-level router for research tasks that span search, candidate review, archiving, and optional transcription:
+
+- Sends single-stage work directly to the appropriate child Skill
+- Never turns a search result into an automatic download
+- Enforces read-only social-platform use, exact-scope authorization, and no WeChat UI control
+- Ships with a portable read-only backend doctor
+
+See [yichen-web-research/README.md](./yichen-web-research/README.md) for the full family, optional backends, and configuration.
+
+### 17) `yichen-unified-search`
+
+Search-only orchestration across public web and platform-specific adapters:
+
+- Supports AnySearch, GitHub, WeChat public search, Xiaohongshu, Douyin, Toutiao, X, Bilibili, YouTube, and Xiaoyuzhou routes
+- Produces normalized candidates with provenance, coverage, and limitations
+- Requires current-task authorization before browser-session searches
+
+### 18) `yichen-content-archive`
+
+Known-link and exact-container processing:
+
+- Reads and archives confirmed web, Xiaohongshu, Douyin, WeChat Official Account, YouTube, Bilibili, and Xiaoyuzhou targets
+- Keeps search/discovery outside the archive layer
+- Uses collision-safe outputs, resumable checkpoints, and explicit overwrite guards
+
+### 19) `yichen-bookmarks-export`
+
+Safety wrapper around `yichen-social-bookmarks-exporter`:
+
+- Requires explicit authorization for each platform and scope in the current task
+- Exports links only and does not transfer that authorization to downloads
+- Produces a minimal handoff that references files without embedding private URLs
+
+### 20) `yichen-asr`
+
+Unified ASR router:
+
+- Defaults text-only work to a compatible Step executor and timestamp/SRT work to `yichen-volc-asr`
+- Uses only environment-provided App IDs and tokens
+- Never silently resubmits an already submitted job to another provider
+
 ## Project Structure
 
 ```text
@@ -224,6 +272,35 @@ yichen-skills/
 │  ├─ agents/
 │  ├─ references/
 │  └─ scripts/
+├─ yichen-web-research/
+│  ├─ SKILL.md
+│  ├─ README.md
+│  ├─ agents/
+│  ├─ scripts/
+│  └─ tests/
+├─ yichen-unified-search/
+│  ├─ SKILL.md
+│  ├─ agents/
+│  ├─ references/
+│  ├─ scripts/
+│  └─ tests/
+├─ yichen-content-archive/
+│  ├─ SKILL.md
+│  ├─ agents/
+│  ├─ references/
+│  ├─ scripts/
+│  └─ tests/
+├─ yichen-bookmarks-export/
+│  ├─ SKILL.md
+│  ├─ agents/
+│  ├─ references/
+│  └─ tests/
+├─ yichen-asr/
+│  ├─ SKILL.md
+│  ├─ agents/
+│  ├─ references/
+│  ├─ scripts/
+│  └─ tests/
 ├─ .agents/plugins/
 │  └─ marketplace.json
 ├─ plugins/yichen-grok-consult/
@@ -257,6 +334,7 @@ yichen-skills/
   - WeCom local vault: `pycryptodome`; `frida` only for explicitly authorized raw-key capture
   - Grok Consult: Node.js 18+, the official Grok Build CLI, and an active `grok login`; local OpenCodex is optional for non-search consultation tools
   - Social bookmarks exporter: Xiaohongshu/Douyin require an agent environment with `chrome:control-chrome`; the X route optionally requires a Field Theory `ft` CLI build whose version contains `graphql-only`
+  - Web research family: install all five family directories together; optional coverage uses AnySearch, OpenCLI, Grok CLI, `xreach`, `gh`, `yt-dlp`, `bili`, `ffmpeg`, and the companion Skills listed in its README
 
 ## Installation
 
@@ -281,6 +359,11 @@ Keep directory names unchanged:
 - `yichen-wechat-mp-batch-exporter`
 - `yichen-wecom-local-vault`
 - `yichen-social-bookmarks-exporter`
+- `yichen-web-research`
+- `yichen-unified-search`
+- `yichen-content-archive`
+- `yichen-bookmarks-export`
+- `yichen-asr`
 
 `yichen-grok-consult` is a Codex plugin rather than a standalone copied skill. Install it through this repository's marketplace:
 
@@ -373,6 +456,14 @@ codex plugin add yichen-grok-consult@yichen-skills
 4. Explicitly authorize the platforms, export scope, and output directory for the current task
 5. The Skill exports and validates links only; it does not automatically download media or change collection state
 
+### L) Enable the Web Research family
+
+1. Install `yichen-web-research`, `yichen-unified-search`, `yichen-content-archive`, `yichen-bookmarks-export`, and `yichen-asr` together
+2. Install only the optional backends needed for your platforms
+3. Run `python3 yichen-web-research/scripts/validate_family.py`
+4. Start with `$yichen-web-research` for multi-stage work, or call a child directly for search-only, known-link archive, bookmark export, or local ASR
+5. See [yichen-web-research/README.md](./yichen-web-research/README.md) before enabling account-session or paid-ASR routes
+
 ## X Cookie Handling
 
 This repo does not include real credentials or cookie templates.
@@ -399,6 +490,7 @@ rm -f /tmp/x_current_cookies.json
 - Third-party AppID, AppToken, TableID, bucket names, and ASR tokens must be supplied through environment variables or private config
 - WeChat exporter auth-keys, credential files, QR secrets, captured cookies, and downloaded article archives must stay local and private
 - `yichen-grok-consult` contains no fixed proxy or credentials; Grok queries and results are still sent to xAI and retained in an isolated local session directory
+- The Web Research family contains no personal absolute paths, App IDs, tokens, fixed Keychain items, or private proxy values; account-backed routes remain opt-in
 
 If you ever exposed real cookies in a public repo, rotate them immediately.
 

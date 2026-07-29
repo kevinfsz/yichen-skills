@@ -1,0 +1,4 @@
+interface:
+  display_name: "逸尘内容归档"
+  short_description: "归档已知网页、视频、播客与精确内容容器，不执行搜索发现"
+  default_prompt: "Use $yichen-content-archive to archive these known URLs or this explicitly specified collection without searching for additional content."
