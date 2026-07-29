@@ -20,6 +20,7 @@ A skill collection for creators who want to streamline writing, X Articles draft
 12. Batch-export WeChat Official Account article history, original-article lists, bodies, and optional read/comment metrics (`yichen-wechat-mp-batch-exporter`)
 13. Read and export local WeCom/企业微信 5.x database snapshots without controlling the app (`yichen-wecom-local-vault`)
 14. Let GPT call Grok for native X search or an independent second opinion without switching the main model (`yichen-grok-consult`)
+15. Export Xiaohongshu favorites, Douyin favorites, and X bookmarks as validated local URL files (`yichen-social-bookmarks-exporter`)
 
 ## Included Skills
 
@@ -142,6 +143,15 @@ Use Grok from a GPT-led Codex task without switching the main model:
 
 See [plugins/yichen-grok-consult/README.md](./plugins/yichen-grok-consult/README.md) for installation, privacy boundaries, and verification limits.
 
+### 15) `yichen-social-bookmarks-exporter`
+Read-only export for the currently accessible private collections on three platforms:
+- Reuses the user's authenticated Chrome tab for Xiaohongshu and Douyin, scrolling to a stable bottom and deduplicating links
+- Uses a separately installed Field Theory `ft` CLI build whose version contains `graphql-only` for the X route
+- Writes one URL per line and validates counts, blanks, duplicates, and malformed rows
+- Does not export cookies, browser storage, passwords, or token databases; Xiaohongshu `xsec_token` values stay only in the user-requested local link file
+
+See [yichen-social-bookmarks-exporter/README.md](./yichen-social-bookmarks-exporter/README.md) for installation, dependencies, and privacy boundaries.
+
 ## Project Structure
 
 ```text
@@ -208,6 +218,12 @@ yichen-skills/
 │  ├─ agents/
 │  ├─ references/
 │  └─ scripts/
+├─ yichen-social-bookmarks-exporter/
+│  ├─ SKILL.md
+│  ├─ README.md
+│  ├─ agents/
+│  ├─ references/
+│  └─ scripts/
 ├─ .agents/plugins/
 │  └─ marketplace.json
 ├─ plugins/yichen-grok-consult/
@@ -240,6 +256,7 @@ yichen-skills/
   - WeChat MP batch export: Python 3 standard library for known URL downloads; `wechat-article-exporter` / `wxdown-service` only for account history, metrics, and comments
   - WeCom local vault: `pycryptodome`; `frida` only for explicitly authorized raw-key capture
   - Grok Consult: Node.js 18+, the official Grok Build CLI, and an active `grok login`; local OpenCodex is optional for non-search consultation tools
+  - Social bookmarks exporter: Xiaohongshu/Douyin require an agent environment with `chrome:control-chrome`; the X route optionally requires a Field Theory `ft` CLI build whose version contains `graphql-only`
 
 ## Installation
 
@@ -263,6 +280,7 @@ Keep directory names unchanged:
 - `yichen-agent-memory`
 - `yichen-wechat-mp-batch-exporter`
 - `yichen-wecom-local-vault`
+- `yichen-social-bookmarks-exporter`
 
 `yichen-grok-consult` is a Codex plugin rather than a standalone copied skill. Install it through this repository's marketplace:
 
@@ -346,6 +364,14 @@ codex plugin add yichen-grok-consult@yichen-skills
 3. Start a new Codex task
 4. Ask GPT to search public X posts with Grok or request a Grok second opinion
 5. See [plugins/yichen-grok-consult/README.md](./plugins/yichen-grok-consult/README.md) before configuring proxies or OpenCodex
+
+### K) Enable `yichen-social-bookmarks-exporter`
+
+1. Ensure `yichen-social-bookmarks-exporter/SKILL.md` is available in your loaded skills path
+2. For Xiaohongshu or Douyin, sign in with the current Chrome session and open the intended favorites page
+3. For X, verify that the separately installed `ft --version` contains `graphql-only`
+4. Explicitly authorize the platforms, export scope, and output directory for the current task
+5. The Skill exports and validates links only; it does not automatically download media or change collection state
 
 ## X Cookie Handling
 

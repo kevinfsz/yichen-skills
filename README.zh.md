@@ -20,6 +20,7 @@
 12. 批量导出公众号历史文章、原创列表、正文，以及可选阅读量/评论数据（`yichen-wechat-mp-batch-exporter`）
 13. 只读解析并导出本机企业微信 5.x 数据库快照，不操控客户端（`yichen-wecom-local-vault`）
 14. 在 GPT 主导的 Codex 对话中调用 Grok 原生搜索 X 或提供第二意见，不切换主模型（`yichen-grok-consult`）
+15. 只读导出小红书收藏、抖音收藏与 X 书签链接，并做数量和格式核验（`yichen-social-bookmarks-exporter`）
 
 ## 包含的技能
 
@@ -141,6 +142,15 @@ Mac 微信双开——无需第三方工具，一条命令搞定：
 
 安装、隐私边界和校验限制见 [plugins/yichen-grok-consult/README.zh.md](./plugins/yichen-grok-consult/README.zh.md)。
 
+### 15) `yichen-social-bookmarks-exporter`
+只读导出三个平台当前可访问的私人收藏链接：
+- 小红书和抖音复用用户已登录的 Chrome 页面会话，滚动到稳定底部并去重
+- X 通过另行安装、版本标识包含 `graphql-only` 的 Field Theory `ft` CLI 读取本地索引
+- 输出一行一个 URL，并校验有效条数、空行、重复和非法行
+- 不导出 Cookie、Local Storage、密码或 Token 数据库；小红书 `xsec_token` 只保存在用户指定的本地链接文件
+
+安装、依赖和隐私边界见 [yichen-social-bookmarks-exporter/README.md](./yichen-social-bookmarks-exporter/README.md)。
+
 ## 目录结构
 
 ```text
@@ -207,6 +217,12 @@ yichen-skills/
 │  ├─ agents/
 │  ├─ references/
 │  └─ scripts/
+├─ yichen-social-bookmarks-exporter/
+│  ├─ SKILL.md
+│  ├─ README.md
+│  ├─ agents/
+│  ├─ references/
+│  └─ scripts/
 ├─ .agents/plugins/
 │  └─ marketplace.json
 ├─ plugins/yichen-grok-consult/
@@ -239,6 +255,7 @@ yichen-skills/
   - 公众号批量导出：已知 URL 正文下载只需 Python 3 标准库；历史列表、阅读量和评论需要额外配置 `wechat-article-exporter` / `wxdown-service`
   - 企业微信本地解析：`pycryptodome`；只有明确授权抓取本机 raw key 时才需要 `frida`
   - Grok Consult：Node.js 18+、官方 Grok Build CLI 和有效的 `grok login`；非搜索咨询工具可选依赖本机 OpenCodex
+  - 社交收藏夹导出：小红书/抖音需要 Agent 环境支持 `chrome:control-chrome`；X 路线可选依赖版本标识包含 `graphql-only` 的 Field Theory `ft` CLI
 
 ## 安装方式
 
@@ -262,6 +279,7 @@ yichen-skills/
 - `yichen-agent-memory`
 - `yichen-wechat-mp-batch-exporter`
 - `yichen-wecom-local-vault`
+- `yichen-social-bookmarks-exporter`
 
 `yichen-grok-consult` 是 Codex 插件，不是只复制目录即可工作的普通 Skill。请通过本仓库的 marketplace 安装：
 
@@ -345,6 +363,14 @@ codex plugin add yichen-grok-consult@yichen-skills
 3. 新建 Codex 任务
 4. 让 GPT 调用 Grok 搜索公开 X 帖子，或要求 Grok 提供第二意见
 5. 配置代理或 OpenCodex 前先看 [plugins/yichen-grok-consult/README.zh.md](./plugins/yichen-grok-consult/README.zh.md)
+
+### K）启用 `yichen-social-bookmarks-exporter`
+
+1. 确保 `yichen-social-bookmarks-exporter/SKILL.md` 在已加载的 skills 路径里
+2. 小红书或抖音导出前，在当前 Chrome 登录目标账号并打开收藏页
+3. X 导出前，确认另行安装的 `ft --version` 包含 `graphql-only`
+4. 明确指定本轮授权的平台、导出范围和输出目录
+5. Skill 只导出链接并做核验，不会自动下载媒体或修改收藏状态
 
 ## X Cookie 处理
 
