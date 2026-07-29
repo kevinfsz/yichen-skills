@@ -4,6 +4,13 @@
 
 一个面向内容创作者的技能仓库，帮助你用 Claude Code / Codex 打通”沉淀知识 + X 文章草稿上传 + 微信数字资产 + 本地解析”的完整流程。
 
+## 关于作者
+
+作者：**逸尘**
+
+- 微信号：`yichen365ai`
+- 添加时请在验证信息中备注：`GitHub`
+
 ## 这个仓库能做什么
 
 1. 把 Claude Code 对话沉淀为结构化 Obsidian 笔记（`yichen-summary`）
@@ -462,6 +469,16 @@ codex plugin add yichen-grok-consult@yichen-skills
 3. 运行 `python3 yichen-web-research/scripts/validate_family.py`
 4. 多阶段任务从 `$yichen-web-research` 开始；纯搜索、已知链接归档、收藏导出或本地 ASR 可直接调用对应子 Skill
 5. 启用账号登录态或付费 ASR 路线前先阅读 [yichen-web-research/README.md](./yichen-web-research/README.md)
+
+## 支持这个项目
+
+如果这些 Skills 对你有帮助，可以通过下面的微信赞赏码自愿请我喝杯咖啡。
+
+<p align="center">
+  <img src="./assets/wechat-reward-code.jpg" width="280" alt="逸尘的微信赞赏码">
+</p>
+
+赞赏完全自愿，不构成付费服务、技术支持、功能交付或响应时效承诺。
 
 ## X Cookie 处理
 

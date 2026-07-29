@@ -4,6 +4,13 @@ English | [中文](./README.zh.md)
 
 A skill collection for creators who want to streamline writing, X Articles draft publishing, WeChat digital-asset capture, and local workflows with Claude Code and Codex.
 
+## Maintainer
+
+Created and maintained by **逸尘 (Yichen)**.
+
+- WeChat: `yichen365ai`
+- When adding me, please include `GitHub` in the verification message
+
 ## What This Repo Does
 
 1. Turn Claude Code conversations into structured Obsidian notes (`yichen-summary`)
@@ -463,6 +470,18 @@ codex plugin add yichen-grok-consult@yichen-skills
 3. Run `python3 yichen-web-research/scripts/validate_family.py`
 4. Start with `$yichen-web-research` for multi-stage work, or call a child directly for search-only, known-link archive, bookmark export, or local ASR
 5. See [yichen-web-research/README.md](./yichen-web-research/README.md) before enabling account-session or paid-ASR routes
+
+## Support This Project
+
+If these Skills are useful to you, you can voluntarily buy me a coffee through
+the WeChat appreciation code below.
+
+<p align="center">
+  <img src="./assets/wechat-reward-code.jpg" width="280" alt="Yichen's WeChat appreciation code">
+</p>
+
+Appreciation is entirely voluntary. It does not create a paid-service,
+technical-support, feature-delivery, or response-time commitment.
 
 ## X Cookie Handling
 
