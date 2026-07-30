@@ -43,7 +43,7 @@ opencli doctor  # 仅 OpenCLI 路线需要
 | 小红书站内关键词 | `opencli xiaohongshu search` | 必须取得当轮 Chrome 登录态授权 | 只返回候选；不下载、不展开评论 |
 | 抖音站内关键词 | `opencli douyin search` | 必须取得当轮 Chrome 登录态授权 | 低频串行；不下载、不展开评论 |
 | 今日头条综合非视频 | `opencli toutiao search` | 专用匿名 profile，不读取用户 Chrome | 单关键词、低频、无自动重试 |
-| Twitter/X 公共搜索 | `$yichen-grok-consult` → `opencli twitter search` → `xreach` | 先检查 Grok OAuth；浏览器会话回退按工具授权 | 只读逐层回退；权限错误立即停止 |
+| Twitter/X 公共搜索 | `$yichen-grok-consult` → 仅额度耗尽时 `fxtwitter_search.py` → OpenCLI → xreach | Grok CLI 使用账号 OAuth；FxTwitter 匿名；后续浏览器会话回退按工具授权 | 所有关键词搜索先走 Grok 原生 `x_search`；只有明确额度或使用上限耗尽才能进入 FxTwitter |
 | B站公开视频 | `bili search` | 匿名优先 | 只生成候选 URL，不下载 |
 | YouTube 公开视频 | `yt-dlp` 的 flat `ytsearch` | 匿名优先 | 只列元数据和 URL，不下载 |
 | 小宇宙全站关键词 | AnySearch `site:xiaoyuzhoufm.com` | 匿名公共网页 | OpenCLI 不提供全站关键词搜索 |
@@ -67,9 +67,15 @@ opencli douyin search "query" --days 1 --content all --limit 30 --enrich -f yaml
 # 今日头条：只保留文章和非视频图文帖
 opencli toutiao search "query" --days 1 --limit 20 -f yaml
 
-# X：先检查现有 OAuth，再调用已安装的 yichen-grok-consult 搜索工具
+# X 第一层：先检查现有 OAuth，再调用已安装的 yichen-grok-consult 搜索工具
 grok models
+# 该工具负责核验 completed XSearch。
 
+# 仅当 Grok 输出明确证明账号额度或使用上限耗尽时，工具内部才运行：
+python3 ~/.agents/skills/yichen-unified-search/scripts/fxtwitter_search.py \
+  --query "query" --limit 20 --days 1
+
+# FxTwitter 仍失败或零结果时，才继续 OpenCLI → xreach。
 # B站 / YouTube：仅发现候选
 bili search "query" --type video --page 1 -n 20 --json
 yt-dlp --flat-playlist --dump-single-json "ytsearch20:query"
@@ -85,5 +91,9 @@ yt-dlp --flat-playlist --dump-single-json "ytsearch20:query"
 - 用户明确要求“搜索引用、讨论或关联某 URL 的其他公开内容”时，可用 `--input-kind url-seed` 把 URL 作为发现查询的一部分；该模式不得读取、下载或归档种子 URL 本身。默认 `auto` 遇到任意 URL 仍安全交接到归档层。
 - 平台原生适配器只在必须补平台结构化字段时使用。
 - 小红书、抖音授权前可输出计划，不可实际运行命令。
-- `$yichen-grok-consult` 当前不可调用时，可按既定顺序尝试 OpenCLI 和 xreach。任一层涉及浏览器会话时必须取得当轮授权；不要自动安装插件或另找账号后端。
+- X 关键词搜索一律先执行 `$yichen-grok-consult` 的 `search_x_with_grok`。该工具固定使用 Grok CLI 原生 `x_search`；只有明确账号额度或使用上限耗尽时才进入 `fxtwitter_search.py`，FxTwitter 失败或零结果后才继续 OpenCLI → xreach。
+- 未登录、401/403、权限、输入、超时、网络、服务异常、零结果或搜索证据不可核验都不是额度耗尽；这些情况必须停止并报告，禁止静默调用 FxTwitter。
+- FxTwitter 请求只发公开关键词，不携带 Cookie、Token 或 X 登录态；只请求一页，不自动翻页、不自动重试。它是第三方公共索引，零结果不能证明 X 上没有相关内容。
+- FxTwitter 返回普通推文、引用推文和 Article 候选时，保留引用对象与 Article 标题、预览和封面元数据；搜索阶段不得展开 Article 全文。全文读取仍交给 `$yichen-content-archive`。
+- `$yichen-grok-consult` 当前不可调用时，只报告主链不可用；不要自动安装插件，也不要绕过固定四层链另找账号后端。
 - 任何验证码、登录墙、权限错误或账号安全提示都应停止，不尝试绕过或自动重试。

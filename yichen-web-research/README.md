@@ -18,7 +18,8 @@ The family can use capabilities that are not bundled here:
 
 - AnySearch for general, batch, and vertical public search
 - `gh`, `yt-dlp`, `bili`, OpenCLI, Grok CLI, and `xreach`
-- the `yichen-grok-consult` plugin for native X search
+- the `yichen-grok-consult` plugin for Grok-first native X search, with anonymous
+  FxTwitter fallback only after explicit Grok account-quota exhaustion
 - `yichen-social-bookmarks-exporter`, `yichen-xiaohongshu-fetch`,
   `yichen-douyin-fetcher`, and `yichen-wechat-mp-batch-exporter`
 - `yichen-volc-asr`, `ffmpeg`, and an optional compatible Step ASR executor
@@ -26,6 +27,11 @@ The family can use capabilities that are not bundled here:
 
 Missing optional backends reduce coverage; they do not relax authorization
 rules or trigger automatic installation.
+
+Known public X status and Article URLs are handled by the bundled
+`yichen-content-archive/scripts/x_known_url.py` adapter. It uses anonymous
+FxTwitter first, adds Jina only when needed, and returns OpenCLI/xreach merely
+as authorization-gated fallback plans.
 
 ## Portable configuration
 

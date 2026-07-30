@@ -30,6 +30,10 @@ UNIFIED_ASR_DOCTOR = (
 ARCHIVE_SCRIPTS = (
     SKILLS_ROOT / "yichen-content-archive/scripts"
 )
+FXTWITTER_SEARCH = (
+    SKILLS_ROOT / "yichen-unified-search/scripts/fxtwitter_search.py"
+)
+X_KNOWN_URL = ARCHIVE_SCRIPTS / "x_known_url.py"
 XIAOYUZHOU = ARCHIVE_SCRIPTS / "xiaoyuzhou_stepfun.py"
 XIAOYUZHOU_OPENCLI = ARCHIVE_SCRIPTS / "xiaoyuzhou_opencli.py"
 XIAOYUZHOU_OPENCLI_CREDENTIALS = Path(
@@ -43,8 +47,12 @@ TOUTIAO_SEARCH_ADAPTER = OPENCLI_HOME / "clis/toutiao/search.js"
 TOUTIAO_HEADLESS_ADAPTER = OPENCLI_HOME / "clis/toutiao/headless.js"
 TOUTIAO_ANONYMOUS_PROFILE = OPENCLI_HOME / "toutiao-anonymous-profile"
 SYSTEM_CHROME = Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-GROK_CLI_VALUE = os.environ.get("GROK_CLI") or shutil.which("grok")
-GROK_CLI = Path(GROK_CLI_VALUE).expanduser() if GROK_CLI_VALUE else None
+GROK_CLI_VALUE = (
+    os.environ.get("GROK_CLI")
+    or shutil.which("grok")
+    or str(Path.home() / ".grok/bin/grok")
+)
+GROK_CLI = Path(GROK_CLI_VALUE).expanduser()
 GROK_CONSULT_ROOT_VALUE = os.environ.get("YICHEN_GROK_CONSULT_ROOT")
 GROK_CONSULT_ROOT = (
     Path(GROK_CONSULT_ROOT_VALUE).expanduser()
@@ -256,8 +264,10 @@ def grok_consult_source_ready() -> bool:
         marker in server
         for marker in (
             '"official_cli_account_quota"',
+            "callFxTwitterSearch",
             "callOpenCliSearch",
             "callXreachSearch",
+            "explicit quota-exhaustion evidence",
         )
     ) and "search_x_with_grok" in skill
 
@@ -267,7 +277,7 @@ def grok_consult_enabled() -> bool:
 
 
 def grok_cli_authenticated() -> bool:
-    if GROK_CLI is None or not GROK_CLI.is_file():
+    if not GROK_CLI.is_file():
         return False
     try:
         result = subprocess.run(
@@ -377,56 +387,86 @@ def main() -> None:
     grok_source_ready = grok_consult_source_ready()
     grok_plugin_enabled = grok_consult_enabled()
     grok_authenticated = grok_cli_authenticated()
+    fxtwitter_adapter_ready = FXTWITTER_SEARCH.is_file()
+    x_known_url_adapter_ready = X_KNOWN_URL.is_file()
     opencli_twitter_ready = opencli_search_available("twitter", ("query", "--limit"))
     xreach_ready = shutil.which("xreach") is not None
-    grok_layer_ready = grok_authenticated and (
-        grok_source_ready or grok_plugin_enabled
+    old_twitter_backend_absent = shutil.which("twitter") is None
+    grok_primary_ready = all(
+        (
+            grok_source_ready,
+            grok_plugin_enabled,
+            grok_authenticated,
+        )
     )
-    twitter_ready = any(
-        (grok_layer_ready, opencli_twitter_ready, xreach_ready)
+    twitter_fallback_ready = all(
+        (
+            fxtwitter_adapter_ready,
+            opencli_twitter_ready,
+            xreach_ready,
+            old_twitter_backend_absent,
+        )
+    )
+    twitter_ready = all(
+        (
+            grok_primary_ready,
+            fxtwitter_adapter_ready,
+            x_known_url_adapter_ready,
+        )
     )
     twitter_missing = [
         name
         for name, ready in (
-            ("grok_layer", grok_layer_ready),
+            ("grok_consult_source", grok_source_ready),
+            ("grok_consult_enabled", grok_plugin_enabled),
+            ("grok_cli_authenticated", grok_authenticated),
+            ("fxtwitter_adapter", fxtwitter_adapter_ready),
+            ("x_known_url_adapter", x_known_url_adapter_ready),
             ("opencli_twitter_adapter", opencli_twitter_ready),
             ("xreach", xreach_ready),
+            ("old_backend_removed", old_twitter_backend_absent),
         )
         if not ready
     ]
     channels["twitter"] = {
         "status": "ok" if twitter_ready else "warn",
-        "name": "Twitter/X 公开内容与三层搜索",
+        "name": "Twitter/X Grok 优先搜索与匿名链接解析",
         "message": (
-            "至少一个只读 X 搜索后端可用；按 Grok → OpenCLI → xreach 顺序尝试"
-            if twitter_ready
-            else "X 搜索链当前缺少：" + ", ".join(twitter_missing)
+            "Grok CLI 原生 X 搜索、仅额度耗尽触发的 FxTwitter 回退、X 已知链接解析与 OpenCLI → xreach 末级链均就绪"
+            if twitter_ready and twitter_fallback_ready
+            else "X Grok 优先搜索、匿名适配器或末级回退当前缺少："
+            + ", ".join(twitter_missing)
         ),
         "tier": 1,
         "backends": [
             "official Grok CLI account quota + native x_search",
+            "FxTwitter public API only after explicit quota exhaustion",
+            "known X URL: FxTwitter -> Jina, no login state",
             "OpenCLI Chrome session read-only adapter",
             "xreach read-only GraphQL client",
         ],
-        "active_backend": (
-            "yichen-grok-consult/search_x_with_grok"
-            if grok_layer_ready
-            else "OpenCLI"
-            if opencli_twitter_ready
-            else "xreach"
-            if xreach_ready
-            else None
-        ),
+        "active_backend": "official_cli_account_quota" if grok_primary_ready else None,
         "search_route": [
             "official_cli_account_quota",
+            "fxtwitter-public",
             "opencli",
             "xreach",
         ],
+        "fxtwitter_fallback_condition": "explicit_account_quota_exhausted_only",
+        "fxtwitter_adapter_ready": fxtwitter_adapter_ready,
+        "known_url_adapter_ready": x_known_url_adapter_ready,
+        "primary_login_required": True,
+        "primary_account_oauth_used": True,
+        "grok_primary_ready": grok_primary_ready,
+        "fallback_chain_ready": twitter_fallback_ready,
         "grok_consult_source_ready": grok_source_ready,
         "grok_consult_enabled": grok_plugin_enabled,
         "grok_cli_authenticated": grok_authenticated,
+        "grok_oauth_auto_refresh": True,
+        "manual_login_required_each_run": False,
         "opencli_twitter_adapter_ready": opencli_twitter_ready,
         "xreach_ready": xreach_ready,
+        "old_twitter_backend_absent": old_twitter_backend_absent,
     }
 
     xiaohongshu_search_ready = opencli_search_available(

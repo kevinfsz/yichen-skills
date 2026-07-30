@@ -8,13 +8,22 @@ import { homedir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 
 const SERVER_NAME = "grok-consult";
-const SERVER_VERSION = "0.4.1";
-const DEFAULT_ENDPOINT = "http://127.0.0.1:10100/v1/responses";
-const DEFAULT_MODEL = "xai/grok-4.5";
-const DEFAULT_TIMEOUT_MS = 220_000;
+const SERVER_VERSION = "0.8.0";
 const DEFAULT_GROK_SEARCH_TIMEOUT_MS = 600_000;
+const DEFAULT_LOCAL_READER_TIMEOUT_MS = 120_000;
 const DEFAULT_GROK_HOME = join(homedir(), ".grok");
 const DEFAULT_GROK_CLI = join(DEFAULT_GROK_HOME, "bin", "grok");
+const DEFAULT_PYTHON = "/usr/bin/python3";
+const DEFAULT_FXTWITTER_ADAPTER = join(
+  homedir(),
+  ".agents",
+  "skills",
+  "yichen-unified-search",
+  "scripts",
+  "fxtwitter_search.py",
+);
+const DEFAULT_OPENCLI = join(homedir(), ".npm-global", "bin", "opencli");
+const DEFAULT_XREACH = join(homedir(), ".npm-global", "bin", "xreach");
 const REAL_GROK_AUTH_PATH = join(DEFAULT_GROK_HOME, "auth.json");
 const GROK_CONSULT_ROOT = join(DEFAULT_GROK_HOME, "grok-consult");
 const GROK_SEARCH_HOME = join(GROK_CONSULT_ROOT, "home");
@@ -26,6 +35,8 @@ const DEFAULT_GROK_SEARCH_MAX_TURNS = 40;
 const CLI_STDOUT_CAP_BYTES = 2_000_000;
 const CLI_STDERR_CAP_BYTES = 256_000;
 const CLI_TRANSCRIPT_CAP_BYTES = 10_000_000;
+const LOCAL_READER_STDOUT_CAP_BYTES = 4_000_000;
+const LOCAL_READER_STDERR_CAP_BYTES = 256_000;
 const MAX_TOTAL_INPUT_CHARS = 120_000;
 const MAX_OUTPUT_CHARS = 60_000;
 const TWITTER_EPOCH_MS = 1288834974657n;
@@ -72,20 +83,11 @@ default_skills_installs_purged = true
 official_marketplace_auto_installed = true
 `;
 
-const ALLOWED_MODELS = new Set([
-  "xai/grok-4.5",
-  "xai/grok-4.3",
-  "xai/grok-4.20-0309-reasoning",
-  "xai/grok-4.20-0309-non-reasoning",
-  "xai/grok-build-0.1",
-  "xai/grok-composer-2.5-fast",
-]);
-
 const TOOLS = [
   {
     name: "search_x_with_grok",
     title: "Search X with Grok",
-    description: "Use the official Grok CLI's native x_search to find public X posts, then deterministically decode the timestamps embedded in candidate status IDs while GPT remains the controlling model.",
+    description: "Search public X posts with official Grok CLI first. Only explicit account quota exhaustion may fall back to anonymous FxTwitter, followed by OpenCLI and xreach if needed. Candidate status IDs are decoded locally while GPT remains the controlling model.",
     inputSchema: {
       type: "object",
       properties: {
@@ -105,7 +107,7 @@ const TOOLS = [
   {
     name: "ask_grok",
     title: "Ask Grok",
-    description: "Ask Grok for an independent answer or second opinion while GPT remains the controlling model.",
+    description: "Ask Grok for an independent answer or second opinion through the official Grok CLI account quota.",
     inputSchema: {
       type: "object",
       properties: {
@@ -120,7 +122,7 @@ const TOOLS = [
   {
     name: "review_with_grok",
     title: "Review with Grok",
-    description: "Have Grok review a draft, plan, or analysis and identify concrete weaknesses and improvements.",
+    description: "Have Grok review a draft, plan, or analysis through the official Grok CLI account quota.",
     inputSchema: {
       type: "object",
       properties: {
@@ -136,7 +138,7 @@ const TOOLS = [
   {
     name: "challenge_with_grok",
     title: "Challenge with Grok",
-    description: "Ask Grok to challenge a claim, expose hidden assumptions, and present the strongest counterarguments.",
+    description: "Ask Grok to challenge a claim through the official Grok CLI account quota.",
     inputSchema: {
       type: "object",
       properties: {
@@ -252,7 +254,7 @@ function decodeXStatusId(idText) {
   }
 }
 
-function extractAndDecodeXPosts(searchSources, args, asOfMs) {
+function extractAndDecodeXPosts(searchSources, args, asOfMs, provenance = "grok_final_answer_after_verified_native_x_search") {
   const requestedDate = optionalDate(args.date);
   const timezone = optionalTimeZone(args.timezone);
   const requestedHours = optionalInteger(args.hours, "hours", 24, 1, 168);
@@ -262,7 +264,7 @@ function extractAndDecodeXPosts(searchSources, args, asOfMs) {
   const statusPattern = /https?:\/\/(?:www\.)?(?:x\.com|twitter\.com)\/([A-Za-z0-9_]{1,15})\/status(?:es)?\/(\d{10,25})/gi;
   const sourceInputs = searchSources.map((sourceText) => ({
     sourceText,
-    provenance: "grok_final_answer_after_verified_native_x_search",
+    provenance,
   }));
 
   for (const { sourceText, provenance } of sourceInputs) {
@@ -301,31 +303,8 @@ function extractAndDecodeXPosts(searchSources, args, asOfMs) {
     matched,
     excluded_outside_window: excludedOutsideWindow,
     as_of_utc: new Date(asOfMs).toISOString(),
-    limitations: "Snowflake decoding reveals only the timestamp encoded in the numeric status ID; it does not prove that X issued or currently serves that ID. Candidate URLs are extracted in final-answer order after the session transcript proves at least one completed XSearch call; this verifier does not independently intersect each URL with raw XSearch tool output. Post text, author identity, availability, and engagement still require evidence and must remain unknown when unavailable.",
+    limitations: `Snowflake decoding reveals only the timestamp encoded in the numeric status ID; it does not prove that X issued or currently serves that ID. Candidate URL provenance is ${provenance}. Post text, author identity, availability, and engagement still require evidence and must remain unknown when unavailable.`,
   };
-}
-
-function validateEndpoint(raw) {
-  const url = new URL(raw);
-  const hostname = url.hostname.toLowerCase();
-  const loopback = hostname === "127.0.0.1" || hostname === "localhost" || hostname === "::1" || hostname === "[::1]";
-  if (url.protocol !== "http:" || !loopback) {
-    throw new Error("GROK_CONSULT_ENDPOINT must be an http loopback URL");
-  }
-  return url.toString();
-}
-
-function openCodexRuntimeConfig() {
-  const endpoint = validateEndpoint(process.env.GROK_CONSULT_ENDPOINT || DEFAULT_ENDPOINT);
-  const model = (process.env.GROK_CONSULT_MODEL || DEFAULT_MODEL).trim();
-  if (!ALLOWED_MODELS.has(model)) {
-    throw new Error(`GROK_CONSULT_MODEL is not allowed: ${model}`);
-  }
-  const requestedTimeout = Number(process.env.GROK_CONSULT_TIMEOUT_MS || DEFAULT_TIMEOUT_MS);
-  const timeoutMs = Number.isFinite(requestedTimeout)
-    ? Math.min(230_000, Math.max(5_000, Math.trunc(requestedTimeout)))
-    : DEFAULT_TIMEOUT_MS;
-  return { endpoint, model, timeoutMs };
 }
 
 function boundedEnvironmentNumber(name, defaultValue, min, max) {
@@ -348,7 +327,7 @@ async function pathExists(path) {
 async function requireRealDirectory(path) {
   const info = await lstat(path);
   if (!info.isDirectory() || info.isSymbolicLink()) {
-    throw new Error("Expected a real directory, not a symlink");
+    throw new Error(`Expected a real directory, not a symlink: ${path}`);
   }
 }
 
@@ -369,11 +348,11 @@ async function ensureExactIsolatedConfig() {
     if (error?.code !== "EEXIST") throw error;
     const info = await lstat(GROK_SEARCH_CONFIG_PATH);
     if (!info.isFile() || info.isSymbolicLink()) {
-      throw new Error("The isolated Grok config must be a real file");
+      throw new Error(`The isolated Grok config must be a real file: ${GROK_SEARCH_CONFIG_PATH}`);
     }
     const existing = await readFile(GROK_SEARCH_CONFIG_PATH, "utf8");
     if (existing !== ISOLATED_GROK_CONFIG) {
-      throw new Error("The isolated Grok config differs from the required minimal config");
+      throw new Error(`The isolated Grok config differs from the required minimal config: ${GROK_SEARCH_CONFIG_PATH}`);
     }
   }
   await chmod(GROK_SEARCH_CONFIG_PATH, 0o600);
@@ -390,17 +369,17 @@ async function ensureNativeSearchRuntime() {
     cliInfo = await stat(cli);
     await access(cli, fsConstants.X_OK);
   } catch {
-    throw new Error("Official Grok CLI was not found or is not executable. Install Grok Build or set GROK_CONSULT_CLI to its absolute path, then retry.");
+    throw new Error(`Official Grok CLI was not found or is not executable at ${cli}. Install Grok Build, then retry.`);
   }
   if (!cliInfo.isFile()) {
-    throw new Error("GROK_CONSULT_CLI must point to a regular executable file");
+    throw new Error(`GROK_CONSULT_CLI is not a regular executable file: ${cli}`);
   }
 
   try {
     const authInfo = await lstat(REAL_GROK_AUTH_PATH);
     if (!authInfo.isFile() || authInfo.isSymbolicLink()) throw new Error("not a real file");
   } catch {
-    throw new Error("The official Grok CLI is not logged in. Run 'grok login' in a terminal, finish the browser login, then retry.");
+    throw new Error(`The official Grok CLI is not logged in. Run '${cli} login' in a terminal, finish the browser login, then retry.`);
   }
 
   await requireRealDirectory(DEFAULT_GROK_HOME);
@@ -412,7 +391,7 @@ async function ensureNativeSearchRuntime() {
 
   for (let current = GROK_SEARCH_RUNTIME_DIR; ; current = dirname(current)) {
     if (await pathExists(join(current, ".git"))) {
-      throw new Error("Refusing to run Grok search inside a Git repository");
+      throw new Error(`Refusing to run Grok search inside a Git repository: ${current}`);
     }
     const parent = dirname(current);
     if (parent === current) break;
@@ -530,19 +509,6 @@ function buildPrompt(name, args, asOfMs = Date.now()) {
   throw new Error(`Unknown tool: ${name}`);
 }
 
-function extractText(payload) {
-  if (typeof payload?.output_text === "string" && payload.output_text.trim()) {
-    return payload.output_text.trim();
-  }
-  const parts = [];
-  for (const item of Array.isArray(payload?.output) ? payload.output : []) {
-    for (const content of Array.isArray(item?.content) ? item.content : []) {
-      if (typeof content?.text === "string" && content.text.trim()) parts.push(content.text.trim());
-    }
-  }
-  return parts.join("\n\n").trim();
-}
-
 function extractOrderedUrlsFromText(text) {
   const urls = [];
   const seen = new Set();
@@ -557,7 +523,7 @@ function extractOrderedUrlsFromText(text) {
   return urls;
 }
 
-function parseNativeSearchOutput(raw) {
+function parseNativeCliOutput(raw) {
   const trimmed = raw.trim();
   if (!trimmed) throw new Error("The official Grok CLI returned no stdout");
   let envelope;
@@ -580,11 +546,58 @@ function parseNativeSearchOutput(raw) {
   if (!text) {
     const message = typeof envelope.message === "string" ? envelope.message : "";
     if (envelope.type === "error" || message) {
-      throw new Error("The official Grok CLI returned an error without usable search output");
+      throw new Error(`The official Grok CLI returned an error without usable output${message ? `: ${compactDiagnostic(message)}` : ""}`);
     }
     throw new Error("The official Grok CLI JSON envelope did not contain text output");
   }
   return { text };
+}
+
+function compactDiagnostic(value, maxChars = 900) {
+  return String(value || "")
+    .replace(/(?:authorization\s*:\s*bearer|bearer)\s+[^\s]+/gi, "Bearer [redacted]")
+    .replace(/\b(?:xai-|sk-)[A-Za-z0-9_-]{12,}\b/g, "[redacted-key]")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxChars);
+}
+
+function isCancelledError(error, externalSignal) {
+  const message = String(error?.message || error || "");
+  return Boolean(externalSignal?.aborted) || /\bcancel(?:led|ed)?\b|\babort(?:ed)?\b/i.test(message);
+}
+
+function isExplicitQuotaExhaustionError(error) {
+  const message = String(error?.message || error || "");
+  return /quota(?:\s+has)?\s*(?:exceeded|exhausted|reached)|usage(?:\s+or\s+spend)?\s+limit|weekly\s+(?:usage\s+)?limit|you(?:'ve| have) (?:hit|reached|exceeded) (?:your|the) (?:weekly |usage )?limit|insufficient (?:credits?|balance|quota)|resource[_ -]?exhausted|credit balance/i.test(message);
+}
+
+function looksLikeQuotaExhaustionText(text) {
+  const message = String(text || "").trim();
+  if (!message || message.length > 1_500) return false;
+  return /you(?:'ve| have) (?:hit|reached|exceeded) (?:your|the) (?:weekly |usage )?limit|quota(?:\s+has)?\s*(?:exceeded|exhausted|reached)|usage(?:\s+or\s+spend)?\s+limit|weekly\s+(?:usage\s+)?limit|insufficient (?:credits?|balance|quota)|resource[_ -]?exhausted|credit balance/i.test(message);
+}
+
+function routeAttempt(route, error) {
+  const message = String(error?.message || error || "");
+  if (route === "official_cli_account_quota" && isExplicitQuotaExhaustionError(error)) {
+    return { route, error: "Official Grok CLI account quota or usage limit was exhausted" };
+  }
+  return { route, error: compactDiagnostic(message, 600) || "unknown error" };
+}
+
+function appendRouteSelection(text, selected, attempts) {
+  return [
+    text,
+    "",
+    "<grok_consult_route>",
+    JSON.stringify({ selected, fallback_attempts: attempts }, null, 2),
+    "</grok_consult_route>",
+  ].join("\n");
+}
+
+function allRoutesFailedMessage(attempts) {
+  return `All eligible grok-consult routes failed: ${attempts.map((attempt) => `${attempt.route}: ${attempt.error}`).join(" | ")}`;
 }
 
 async function findSessionUpdatesPath(config, sessionId) {
@@ -603,12 +616,12 @@ async function findSessionUpdatesPath(config, sessionId) {
       throw error;
     }
     if (!sessionInfo.isDirectory() || sessionInfo.isSymbolicLink()) {
-      throw new Error("The Grok session transcript directory is not a real directory");
+      throw new Error(`The Grok session transcript directory is not a real directory: ${sessionDir}`);
     }
     const updatesPath = join(sessionDir, "updates.jsonl");
     const updatesInfo = await lstat(updatesPath);
     if (!updatesInfo.isFile() || updatesInfo.isSymbolicLink()) {
-      throw new Error("The Grok session transcript is not a real file");
+      throw new Error(`The Grok session transcript is not a real file: ${updatesPath}`);
     }
     if (updatesInfo.size > CLI_TRANSCRIPT_CAP_BYTES) {
       throw new Error("The Grok session transcript exceeded the local verification safety limit");
@@ -666,7 +679,7 @@ async function verifyNativeSearchTranscript(config, sessionId) {
     completed_tool_call_count: completedTools.length,
     completed_tool_names: completedTools.map((tool) => tool.name),
     x_search_completed_call_count: xSearchCalls.length,
-    transcript_location: "isolated GROK_HOME session transcript",
+    transcript_path: updatesPath,
     proof_condition: "A tool_call with rawInput.variant=XSearch has a completed tool_call_update for the same toolCallId.",
     limitations: "This proves that the session completed native XSearch at least once. It does not independently prove that every URL in Grok's final answer appeared in raw XSearch output.",
   };
@@ -704,7 +717,7 @@ function beginSignalShutdown(signal) {
   }, 1_500);
 }
 
-function runNativeSearchProcess(config, input, externalSignal, sessionId) {
+function runNativeCliProcess(config, input, externalSignal, sessionId, { allowedTools, maxTurns }) {
   if (externalSignal?.aborted) {
     return Promise.reject(externalSignal.reason || new Error("Request cancelled"));
   }
@@ -716,8 +729,10 @@ function runNativeSearchProcess(config, input, externalSignal, sessionId) {
     config.runtimeDir,
     "--session-id",
     sessionId,
-    "--tools",
-    "x_search,web_search,web_fetch",
+  ];
+  argv.push("--tools", allowedTools);
+  if (!allowedTools) argv.push("--disable-web-search");
+  argv.push(
     "--deny",
     "MCPTool",
     "--always-approve",
@@ -729,8 +744,8 @@ function runNativeSearchProcess(config, input, externalSignal, sessionId) {
     "--no-subagents",
     "--no-plan",
     "--max-turns",
-    String(config.maxTurns),
-  ];
+    String(maxTurns),
+  );
 
   return new Promise((resolve, reject) => {
     let child;
@@ -836,34 +851,288 @@ function runNativeSearchProcess(config, input, externalSignal, sessionId) {
   });
 }
 
-function parseResponseBody(raw, contentType) {
-  const trimmed = raw.trim();
-  if (!contentType.toLowerCase().includes("text/event-stream") && !trimmed.startsWith("event:")) {
-    return JSON.parse(trimmed);
+async function requireExecutable(path, label) {
+  if (!path || !isAbsolute(path)) throw new Error(`${label} path must be absolute`);
+  let info;
+  try {
+    info = await stat(path);
+    await access(path, fsConstants.X_OK);
+  } catch {
+    throw new Error(`${label} was not found or is not executable at ${path}`);
   }
+  if (!info.isFile()) throw new Error(`${label} is not a regular executable file: ${path}`);
+  return path;
+}
 
-  let completed;
-  let failed;
-  let finalText = "";
-  for (const block of trimmed.split(/\r?\n\r?\n/)) {
-    const data = block
-      .split(/\r?\n/)
-      .filter((line) => line.startsWith("data:"))
-      .map((line) => line.slice(5).trimStart())
-      .join("\n")
-      .trim();
-    if (!data || data === "[DONE]") continue;
-    let event;
-    try { event = JSON.parse(data); } catch { continue; }
-    if (event?.type === "response.completed" && event.response) completed = event.response;
-    if (event?.type === "response.failed") failed = event.response || event;
-    if (event?.type === "response.output_text.done" && typeof event.text === "string") finalText = event.text;
-    if (event?.type === "error") failed = { error: event.error || event };
+async function ensureFallbackRuntime() {
+  await ensurePrivateDirectory(DEFAULT_GROK_HOME);
+  await ensurePrivateDirectory(GROK_CONSULT_ROOT);
+  await ensurePrivateDirectory(GROK_SEARCH_RUNTIME_DIR);
+}
+
+function localReaderEnvironment() {
+  const allowed = [
+    "PATH", "HOME", "USER", "LOGNAME", "TMPDIR", "LANG", "LC_ALL",
+    "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "WS_PROXY", "WSS_PROXY",
+    "http_proxy", "https_proxy", "all_proxy", "no_proxy", "ws_proxy", "wss_proxy",
+  ];
+  return {
+    ...Object.fromEntries(allowed.filter((name) => typeof process.env[name] === "string").map((name) => [name, process.env[name]])),
+    NO_COLOR: "1",
+  };
+}
+
+function runLocalReaderProcess(command, args, externalSignal, timeoutMs) {
+  if (externalSignal?.aborted) return Promise.reject(externalSignal.reason || new Error("Request cancelled"));
+  return new Promise((resolve, reject) => {
+    let child;
+    try {
+      child = spawn(command, args, {
+        cwd: GROK_SEARCH_RUNTIME_DIR,
+        env: localReaderEnvironment(),
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
+        detached: process.platform !== "win32",
+      });
+    } catch (error) {
+      reject(error);
+      return;
+    }
+    activeNativeChildren.add(child);
+
+    const stdoutChunks = [];
+    const stderrChunks = [];
+    let stdoutBytes = 0;
+    let stderrBytes = 0;
+    let overflow = false;
+    let timedOut = false;
+    let cancelled = false;
+    let settled = false;
+    let forceKillTimer;
+
+    const terminate = () => {
+      if (child.exitCode !== null || child.signalCode !== null) return;
+      signalNativeChild(child, "SIGTERM");
+      if (!forceKillTimer) {
+        forceKillTimer = setTimeout(() => signalNativeChild(child, "SIGKILL"), 1_500);
+        forceKillTimer.unref?.();
+      }
+    };
+
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      terminate();
+    }, timeoutMs);
+    timeout.unref?.();
+
+    const abortFromExternal = () => {
+      cancelled = true;
+      terminate();
+    };
+    externalSignal?.addEventListener("abort", abortFromExternal, { once: true });
+    if (externalSignal?.aborted) abortFromExternal();
+
+    child.stdout.on("data", (chunk) => {
+      if (overflow) return;
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      const remaining = LOCAL_READER_STDOUT_CAP_BYTES - stdoutBytes;
+      if (buffer.length > remaining) {
+        if (remaining > 0) stdoutChunks.push(buffer.subarray(0, remaining));
+        overflow = true;
+        terminate();
+        return;
+      }
+      stdoutChunks.push(buffer);
+      stdoutBytes += buffer.length;
+    });
+
+    child.stderr.on("data", (chunk) => {
+      if (overflow) return;
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      const remaining = LOCAL_READER_STDERR_CAP_BYTES - stderrBytes;
+      if (buffer.length > remaining) {
+        if (remaining > 0) stderrChunks.push(buffer.subarray(0, remaining));
+        overflow = true;
+        terminate();
+        return;
+      }
+      stderrChunks.push(buffer);
+      stderrBytes += buffer.length;
+    });
+
+    const finish = (callback) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      if (forceKillTimer) clearTimeout(forceKillTimer);
+      externalSignal?.removeEventListener("abort", abortFromExternal);
+      activeNativeChildren.delete(child);
+      callback();
+      maybeFinishSignalShutdown();
+    };
+
+    child.once("error", (error) => finish(() => reject(error)));
+    child.once("close", (code, signal) => finish(() => resolve({
+      code,
+      signal,
+      stdout: Buffer.concat(stdoutChunks).toString("utf8"),
+      stderr: Buffer.concat(stderrChunks).toString("utf8"),
+      overflow,
+      timedOut,
+      cancelled,
+    })));
+  });
+}
+
+function exactStatusUrl(text) {
+  const match = String(text || "").match(/https?:\/\/(?:www\.)?(?:x\.com|twitter\.com)\/[A-Za-z0-9_]{1,15}\/status(?:es)?\/\d{10,25}/i);
+  return match?.[0] || "";
+}
+
+function statusIdFromUrl(url) {
+  return String(url || "").match(/\/status(?:es)?\/(\d{10,25})/i)?.[1] || "";
+}
+
+function collectFallbackCandidateUrls(raw, requestedUrl = "") {
+  const urls = extractOrderedUrlsFromText(`${requestedUrl}\n${raw}`).filter((url) =>
+    /^https?:\/\/(?:www\.)?(?:x\.com|twitter\.com)\/[A-Za-z0-9_]{1,15}\/status(?:es)?\/\d{10,25}/i.test(url)
+  );
+  let payload;
+  try { payload = JSON.parse(raw); } catch { payload = null; }
+  const generated = [];
+  const visit = (value) => {
+    if (!value || typeof value !== "object") return;
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item);
+      return;
+    }
+    const hasTweetShape = ["text", "full_text", "created_at", "author", "username", "screen_name", "tweet"].some((key) => key in value);
+    const id = value.tweet_id || value.id_str || (hasTweetShape ? value.id : null);
+    if (typeof id === "string" && /^\d{10,25}$/.test(id)) generated.push(`https://x.com/i/status/${id}`);
+    for (const child of Object.values(value)) visit(child);
+  };
+  visit(payload);
+  return [...new Set([...urls, ...generated])].slice(0, 100);
+}
+
+function localReaderOutput(route, raw, args, asOfMs, requestedUrl, commandSummary) {
+  const truncated = raw.length > MAX_OUTPUT_CHARS ? `${raw.slice(0, MAX_OUTPUT_CHARS)}\n\n[Output truncated by grok-consult]` : raw;
+  const candidateUrls = collectFallbackCandidateUrls(raw, requestedUrl);
+  const xPostTimeVerification = extractAndDecodeXPosts(candidateUrls, args, asOfMs, `${route}_read_only_output`);
+  return [
+    `X read-only fallback (route=${route}, model=none)`,
+    "This route returns source data, not a Grok model opinion. GPT remains responsible for interpretation, verification, and all actions.",
+    "",
+    `<${route}_output>`,
+    truncated,
+    `</${route}_output>`,
+    ...(candidateUrls.length > 0 ? ["", `<candidate_urls_from_${route}>`, ...candidateUrls.map((url) => `- ${url}`), `</candidate_urls_from_${route}>`] : []),
+    "",
+    "<local_reader_verification>",
+    JSON.stringify({ route, read_only: true, command: commandSummary, exit_code: 0 }, null, 2),
+    "</local_reader_verification>",
+    "",
+    "<x_post_time_verification>",
+    JSON.stringify(xPostTimeVerification, null, 2),
+    "</x_post_time_verification>",
+  ].join("\n");
+}
+
+async function runCheckedLocalReader(route, command, commandArgs, externalSignal) {
+  await ensureFallbackRuntime();
+  await requireExecutable(command, route);
+  const timeoutMs = boundedEnvironmentNumber("GROK_CONSULT_LOCAL_READER_TIMEOUT_MS", DEFAULT_LOCAL_READER_TIMEOUT_MS, 10_000, 180_000);
+  let result;
+  try {
+    result = await runLocalReaderProcess(command, commandArgs, externalSignal, timeoutMs);
+  } catch (error) {
+    throw new Error(`${route} could not start: ${compactDiagnostic(error?.message || error)}`);
   }
-  if (completed) return completed;
-  if (failed) return failed;
-  if (finalText) return { output_text: finalText };
-  throw new Error("OpenCodex returned an SSE stream without a completed response");
+  if (result.cancelled) throw new Error(`${route} request was cancelled`);
+  if (result.overflow) throw new Error(`${route} exceeded the local output safety limit and was stopped`);
+  if (result.timedOut) throw new Error(`${route} timed out after ${Math.round(timeoutMs / 1000)} seconds`);
+  if (result.code !== 0) {
+    const diagnostic = compactDiagnostic(`${result.stderr}\n${result.stdout}`);
+    throw new Error(`${route} failed (exit code ${result.code ?? "unknown"})${diagnostic ? `: ${diagnostic}` : ""}`);
+  }
+  const raw = result.stdout.trim();
+  if (!raw) throw new Error(`${route} returned no output`);
+  return raw;
+}
+
+async function callOpenCliSearch(args, externalSignal, asOfMs) {
+  const command = (process.env.GROK_CONSULT_OPENCLI || DEFAULT_OPENCLI).trim();
+  const query = requiredText(args.query, "query", 20_000);
+  const requestedUrl = exactStatusUrl(query);
+  const maxResults = optionalInteger(args.max_results, "max_results", 10, 1, 20);
+  const limit = Math.min(50, Math.max(15, maxResults * 3));
+  const commandArgs = requestedUrl
+    ? ["twitter", "thread", statusIdFromUrl(requestedUrl), "--limit", String(limit), "--window", "background", "--site-session", "ephemeral", "--keep-tab", "false", "-f", "json"]
+    : ["twitter", "search", query, "--product", "top", "--exclude", "retweets", "--limit", String(limit), "--window", "background", "--site-session", "ephemeral", "--keep-tab", "false", "-f", "json"];
+  const raw = await runCheckedLocalReader("opencli", command, commandArgs, externalSignal);
+  return localReaderOutput("opencli", raw, args, asOfMs, requestedUrl, requestedUrl ? "twitter thread (read)" : "twitter search (read)");
+}
+
+async function callFxTwitterSearch(args, externalSignal, asOfMs) {
+  const command = (process.env.GROK_CONSULT_PYTHON || DEFAULT_PYTHON).trim();
+  const adapter = (
+    process.env.GROK_CONSULT_FXTWITTER_ADAPTER || DEFAULT_FXTWITTER_ADAPTER
+  ).trim();
+  const query = requiredText(args.query, "query", 20_000);
+  const maxResults = optionalInteger(args.max_results, "max_results", 10, 1, 20);
+  const limit = Math.min(50, Math.max(15, maxResults * 3));
+  const commandArgs = [
+    adapter,
+    "--query",
+    query,
+    "--limit",
+    String(limit),
+    "--feed",
+    "latest",
+  ];
+  if (!args.date) {
+    const hours = optionalInteger(args.hours, "hours", 24, 1, 168);
+    commandArgs.push("--days", String(Math.max(1, Math.ceil(hours / 24))));
+  }
+  const raw = await runCheckedLocalReader(
+    "fxtwitter-public",
+    command,
+    commandArgs,
+    externalSignal,
+  );
+  let envelope;
+  try {
+    envelope = JSON.parse(raw);
+  } catch {
+    throw new Error("fxtwitter-public returned invalid JSON");
+  }
+  if (!Array.isArray(envelope?.candidates)) {
+    throw new Error("fxtwitter-public returned an invalid candidate envelope");
+  }
+  if (envelope.candidates.length === 0) {
+    throw new Error("fxtwitter-public returned zero candidates");
+  }
+  return localReaderOutput(
+    "fxtwitter-public",
+    raw,
+    args,
+    asOfMs,
+    "",
+    "anonymous public search (read)",
+  );
+}
+
+async function callXreachSearch(args, externalSignal, asOfMs) {
+  const command = (process.env.GROK_CONSULT_XREACH || DEFAULT_XREACH).trim();
+  const query = requiredText(args.query, "query", 20_000);
+  const requestedUrl = exactStatusUrl(query);
+  const maxResults = optionalInteger(args.max_results, "max_results", 10, 1, 20);
+  const count = Math.min(50, Math.max(15, maxResults * 3));
+  const commandArgs = requestedUrl
+    ? ["--no-color", "--json", "tweet", requestedUrl]
+    : ["--no-color", "--json", "search", query, "-n", String(count), "--type", "top"];
+  const raw = await runCheckedLocalReader("xreach", command, commandArgs, externalSignal);
+  return localReaderOutput("xreach", raw, args, asOfMs, requestedUrl, requestedUrl ? "tweet (read)" : "search (read)");
 }
 
 async function callNativeSearch(args, input, externalSignal, asOfMs) {
@@ -871,10 +1140,13 @@ async function callNativeSearch(args, input, externalSignal, asOfMs) {
   const sessionId = randomUUID();
   let result;
   try {
-    result = await runNativeSearchProcess(config, input, externalSignal, sessionId);
+    result = await runNativeCliProcess(config, input, externalSignal, sessionId, {
+      allowedTools: "x_search,web_search,web_fetch",
+      maxTurns: config.maxTurns,
+    });
   } catch (error) {
     if (error?.code === "ENOENT") {
-      throw new Error("Official Grok CLI was not found. Install Grok Build or configure GROK_CONSULT_CLI, then retry.");
+      throw new Error(`Official Grok CLI was not found at ${config.cli}. Install Grok Build, then retry.`);
     }
     throw error;
   }
@@ -886,19 +1158,23 @@ async function callNativeSearch(args, input, externalSignal, asOfMs) {
 
   let parsed;
   try {
-    parsed = parseNativeSearchOutput(result.stdout);
+    parsed = parseNativeCliOutput(result.stdout);
   } catch (parseError) {
     const diagnosticText = `${result.stdout}\n${result.stderr}`;
     if (/auth(?:entication)?|log[ -]?in|unauthori[sz]ed|token[^\n]{0,30}(?:expired|invalid)|\b401\b/i.test(diagnosticText)) {
-      throw new Error("The official Grok CLI is not authenticated. Run 'grok login', finish the browser login, then retry.");
+      throw new Error(`The official Grok CLI is not authenticated. Run '${config.cli} login', finish the browser login, then retry.`);
     }
     if (result.timedOut) {
       throw new Error(`Grok native X search timed out after ${Math.round(config.timeoutMs / 1000)} seconds`);
     }
     if (result.code !== 0) {
-      throw new Error(`The official Grok CLI exited without usable output (exit code ${result.code ?? "unknown"})`);
+      const diagnostic = compactDiagnostic(diagnosticText);
+      throw new Error(`The official Grok CLI exited without usable output (exit code ${result.code ?? "unknown"})${diagnostic ? `: ${diagnostic}` : ""}`);
     }
     throw parseError;
+  }
+  if (looksLikeQuotaExhaustionText(`${parsed.text}\n${result.stderr}`)) {
+    throw new Error(`The official Grok CLI account route reported a usage limit: ${compactDiagnostic(`${parsed.text}\n${result.stderr}`)}`);
   }
 
   const nativeSearchVerification = await verifyNativeSearchTranscript(config, sessionId);
@@ -928,56 +1204,61 @@ async function callNativeSearch(args, input, externalSignal, asOfMs) {
   ].join("\n");
 }
 
-async function callOpenCodex(toolName, input, externalSignal) {
-  const config = openCodexRuntimeConfig();
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(new Error("Grok consultation timed out")), config.timeoutMs);
-  const abortFromExternal = () => controller.abort(externalSignal.reason || new Error("Request cancelled"));
-  externalSignal?.addEventListener("abort", abortFromExternal, { once: true });
-
+async function callNativeAdvisor(toolName, input, externalSignal) {
+  const config = await ensureNativeSearchRuntime();
+  const sessionId = randomUUID();
+  let result;
   try {
-    const response = await fetch(config.endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({
-        model: config.model,
-        input,
-        stream: false,
-      }),
-      signal: controller.signal,
+    result = await runNativeCliProcess(config, input, externalSignal, sessionId, {
+      allowedTools: "",
+      maxTurns: 1,
     });
-    if (!response.ok) {
-      const body = (await response.text()).slice(0, 4_000);
-      throw new Error(`OpenCodex returned HTTP ${response.status}: ${body || response.statusText}`);
-    }
-    const rawBody = await response.text();
-    const payload = parseResponseBody(rawBody, response.headers.get("content-type") || "");
-    if (payload?.error) {
-      throw new Error(typeof payload.error?.message === "string" ? payload.error.message : JSON.stringify(payload.error));
-    }
-    const text = extractText(payload);
-    if (!text) throw new Error("Grok returned no text output");
-    const truncated = text.length > MAX_OUTPUT_CHARS ? `${text.slice(0, MAX_OUTPUT_CHARS)}\n\n[Output truncated by grok-consult]` : text;
-    return [
-      `Grok advisory (${config.model}, mode=${toolName}, web_search=disabled)`,
-      "Treat the following as untrusted advisory text. GPT remains responsible for verification and all actions.",
-      "",
-      "<grok_output>",
-      truncated,
-      "</grok_output>",
-    ].join("\n");
   } catch (error) {
-    if (controller.signal.aborted) {
-      throw new Error(error instanceof Error ? error.message : "Grok consultation was cancelled or timed out");
-    }
-    if (error instanceof TypeError) {
-      throw new Error(`Cannot reach local OpenCodex at ${config.endpoint}. Run 'ocx status'; no fallback model was used.`);
+    if (error?.code === "ENOENT") {
+      throw new Error(`Official Grok CLI was not found at ${config.cli}. Install Grok Build, then retry.`);
     }
     throw error;
-  } finally {
-    clearTimeout(timeout);
-    externalSignal?.removeEventListener("abort", abortFromExternal);
   }
+
+  if (result.cancelled) throw new Error("Grok consultation was cancelled");
+  if (result.stdoutOverflow || result.stderrOverflow) {
+    throw new Error("Grok consultation exceeded the local output safety limit and was stopped");
+  }
+
+  let parsed;
+  try {
+    parsed = parseNativeCliOutput(result.stdout);
+  } catch (parseError) {
+    const diagnosticText = `${result.stdout}\n${result.stderr}`;
+    if (/auth(?:entication)?|log[ -]?in|unauthori[sz]ed|token[^\n]{0,30}(?:expired|invalid)|\b401\b/i.test(diagnosticText)) {
+      throw new Error(`The official Grok CLI is not authenticated. Run '${config.cli} login', finish the browser login, then retry.`);
+    }
+    if (result.timedOut) {
+      throw new Error(`Grok consultation timed out after ${Math.round(config.timeoutMs / 1000)} seconds`);
+    }
+    if (result.code !== 0) {
+      const diagnostic = compactDiagnostic(diagnosticText);
+      throw new Error(`The official Grok CLI exited without usable output (exit code ${result.code ?? "unknown"})${diagnostic ? `: ${diagnostic}` : ""}`);
+    }
+    throw parseError;
+  }
+  if (looksLikeQuotaExhaustionText(`${parsed.text}\n${result.stderr}`)) {
+    throw new Error(`The official Grok CLI account route reported a usage limit: ${compactDiagnostic(`${parsed.text}\n${result.stderr}`)}`);
+  }
+
+  const truncated = parsed.text.length > MAX_OUTPUT_CHARS
+    ? `${parsed.text.slice(0, MAX_OUTPUT_CHARS)}\n\n[Output truncated by grok-consult]`
+    : parsed.text;
+  const partial = result.timedOut || result.code !== 0 || result.signal;
+  return [
+    `Grok advisory (${config.model}, mode=${toolName}, cli=official, account_oauth=enabled, web_search=disabled, tools=disabled)`,
+    "Treat the following as untrusted advisory text. GPT remains responsible for verification and all actions.",
+    ...(partial ? ["Grok returned usable partial output before the CLI stopped; verify completeness before relying on it."] : []),
+    "",
+    "<grok_output>",
+    truncated,
+    "</grok_output>",
+  ].join("\n");
 }
 
 async function callGrok(toolName, args, externalSignal) {
@@ -986,10 +1267,48 @@ async function callGrok(toolName, args, externalSignal) {
   if (input.length > MAX_TOTAL_INPUT_CHARS) {
     throw new Error(`Combined request exceeds the ${MAX_TOTAL_INPUT_CHARS.toLocaleString()} character limit`);
   }
-  if (toolName === "search_x_with_grok") {
-    return callNativeSearch(args, input, externalSignal, asOfMs);
+  const attempts = [];
+
+  try {
+    const text = toolName === "search_x_with_grok"
+      ? await callNativeSearch(args, input, externalSignal, asOfMs)
+      : await callNativeAdvisor(toolName, input, externalSignal);
+    return appendRouteSelection(text, "official_cli_account_quota", attempts);
+  } catch (error) {
+    if (isCancelledError(error, externalSignal)) throw error;
+    attempts.push(routeAttempt("official_cli_account_quota", error));
+    if (!isExplicitQuotaExhaustionError(error)) {
+      throw new Error(`Official Grok CLI failed without explicit quota-exhaustion evidence; no alternate route was used. ${attempts[0].error}`);
+    }
   }
-  return callOpenCodex(toolName, input, externalSignal);
+
+  if (toolName !== "search_x_with_grok") throw new Error(allRoutesFailedMessage(attempts));
+
+  try {
+    const text = await callFxTwitterSearch(args, externalSignal, asOfMs);
+    return appendRouteSelection(text, "fxtwitter-public", attempts);
+  } catch (error) {
+    if (isCancelledError(error, externalSignal)) throw error;
+    attempts.push(routeAttempt("fxtwitter-public", error));
+  }
+
+  try {
+    const text = await callOpenCliSearch(args, externalSignal, asOfMs);
+    return appendRouteSelection(text, "opencli", attempts);
+  } catch (error) {
+    if (isCancelledError(error, externalSignal)) throw error;
+    attempts.push(routeAttempt("opencli", error));
+  }
+
+  try {
+    const text = await callXreachSearch(args, externalSignal, asOfMs);
+    return appendRouteSelection(text, "xreach", attempts);
+  } catch (error) {
+    if (isCancelledError(error, externalSignal)) throw error;
+    attempts.push(routeAttempt("xreach", error));
+  }
+
+  throw new Error(allRoutesFailedMessage(attempts));
 }
 
 async function handleRequest(message) {

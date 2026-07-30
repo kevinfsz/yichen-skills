@@ -37,6 +37,7 @@ class ContentArchiveContractTest(unittest.TestCase):
             "绝对不得操控微信客户端",
             "`known_collection`",
             "普通网页",
+            "Twitter/X",
             "B站",
             "小宇宙",
             "Agent 禁止自动使用兼容 `--overwrite`",
@@ -53,6 +54,7 @@ class ContentArchiveContractTest(unittest.TestCase):
                 "wechat_mp_local.py",
                 "xiaoyuzhou_stepfun.py",
                 "xiaoyuzhou_opencli.py",
+                "x_known_url.py",
             },
         )
 
@@ -71,6 +73,7 @@ class ContentArchiveContractTest(unittest.TestCase):
             "xiaoyuzhou-stepfun",
             "xiaoyuzhou-opencli+xiaoyuzhou-stepfun",
             "wechat-mp-local",
+            "x-public-known-url",
         }
         backend_markers = {
             "jina-reader": ("Jina Reader",),
@@ -84,6 +87,7 @@ class ContentArchiveContractTest(unittest.TestCase):
                 "xiaoyuzhou_stepfun.py",
             ),
             "wechat-mp-local": ("wechat_mp_local.py",),
+            "x-public-known-url": ("x_known_url.py",),
         }
         routable_decisions = {"route", "enumerate_then_route"}
         forbidden_branches = {
@@ -146,6 +150,7 @@ class ContentArchiveContractTest(unittest.TestCase):
         self.assertTrue(
             {
                 "web",
+                "x",
                 "xiaohongshu",
                 "douyin",
                 "wechat",

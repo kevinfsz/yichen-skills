@@ -94,9 +94,33 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(result["route"]["backend"], "opencli-weixin-public")
         self.assertFalse(result["route"]["login_state_used"])
 
-    def test_x_routes_to_existing_grok_chain(self):
+    def test_x_routes_to_grok_then_fxtwitter_only_on_quota(self):
         result = ROUTER.plan(request(platform="x"))
         self.assertEqual(result["route"]["backend"], "grok-consult")
+        self.assertTrue(result["route"]["login_state_used"])
+        self.assertEqual(result["steps"][0]["backend"], "grok-consult")
+        self.assertEqual(result["steps"][0]["tool"], "search_x_with_grok")
+        self.assertEqual(
+            result["steps"][0]["fxtwitter_when"],
+            "explicit_account_quota_exhausted_only",
+        )
+        self.assertEqual(
+            result["steps"][0]["contains_read_only_chain"],
+            [
+                "official_grok_cli_account_quota",
+                "fxtwitter-public",
+                "opencli",
+                "xreach",
+            ],
+        )
+        self.assertIn(
+            "timeout",
+            result["steps"][0]["must_stop_without_fallback_when"],
+        )
+
+    def test_x_days_is_forwarded_to_grok_as_hours(self):
+        result = ROUTER.plan(request(platform="x", days=1))
+        self.assertEqual(result["steps"][0]["arguments"]["hours"], 24)
 
     def test_xiaoyuzhou_keyword_search_uses_public_site_discovery(self):
         result = ROUTER.plan(request(platform="xiaoyuzhou"))

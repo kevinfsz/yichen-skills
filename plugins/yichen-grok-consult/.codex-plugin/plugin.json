@@ -1,7 +1,7 @@
 {
   "name": "yichen-grok-consult",
   "version": "0.1.0",
-  "description": "Consult Grok or search public X posts from a GPT-led Codex conversation without switching the main model.",
+  "description": "Consult Grok or search X with official Grok CLI first and explicit-quota-only local fallbacks.",
   "author": {
     "name": "mcncarl",
     "url": "https://github.com/mcncarl"
@@ -19,8 +19,8 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Grok Consult",
-    "shortDescription": "Ask Grok or search X without switching models.",
-    "longDescription": "Keep GPT in control while using Grok as a read-only advisor or using the official Grok Build CLI for native X search with deterministic post-time decoding.",
+    "shortDescription": "Ask Grok or search X with a bounded fallback chain.",
+    "longDescription": "Keep GPT in control while using the official Grok CLI for consultation and native X search, with anonymous FxTwitter fallback only after explicit account-quota exhaustion, followed by read-only OpenCLI and xreach.",
     "developerName": "mcncarl",
     "category": "Productivity",
     "capabilities": [

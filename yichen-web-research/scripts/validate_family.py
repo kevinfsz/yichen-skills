@@ -101,6 +101,21 @@ def check_doctor() -> dict:
             "status"
         )
         in {"ok", "warn"},
+        "x_search_primary_is_grok": (
+            payload.get("twitter", {}).get("active_backend")
+            == "official_cli_account_quota"
+            and payload.get("twitter", {}).get("primary_login_required") is True
+            and payload.get("twitter", {}).get("search_route", [None])[0]
+            == "official_cli_account_quota"
+            and payload.get("twitter", {}).get("search_route", [None, None])[1]
+            == "fxtwitter-public"
+            and payload.get("twitter", {}).get("fxtwitter_fallback_condition")
+            == "explicit_account_quota_exhausted_only"
+        ),
+        "x_known_url_primary_is_anonymous": payload.get("twitter", {}).get(
+            "known_url_adapter_ready"
+        )
+        is True,
         "asr_route_identified": payload.get("asr", {}).get("status")
         in {"ok", "warn"},
         "asr_billing_not_assumed": payload.get("asr", {}).get(
@@ -358,6 +373,15 @@ def main() -> int:
         in boundary_sources["search"],
         "archive_accepts_known_collection": "known_collection"
         in boundary_sources["archive"],
+        "archive_accepts_known_x_urls": (
+            "x_known_url.py" in boundary_sources["archive"]
+            and "FxTwitter → Jina" in boundary_sources["archive"]
+        ),
+        "x_search_is_grok_first": (
+            "官方 Grok CLI" in boundary_sources["search"]
+            and "明确额度耗尽" in boundary_sources["search"]
+            and "FxTwitter" in boundary_sources["search"]
+        ),
         "bookmarks_requires_current_turn_authorization": "当轮授权"
         in boundary_sources["bookmarks"],
         "bookmarks_does_not_download": "不得下载媒体"

@@ -1,10 +1,11 @@
 # 已知链接与精确容器路由
 
-只引用现有 Skill、后端和脚本，不复制实现。调用前读取目标 Skill/参考文件或运行脚本 `--help`；本表只限制可用分支，不替代目标入口的安全规则。
+只引用现有 Skill、后端和本 Skill 的固定安全适配器。调用前读取目标 Skill/参考文件或运行脚本 `--help`；本表只限制可用分支，不替代目标入口的安全规则。
 
 | 平台 | 已知单项 `read` | 已知单项 `download/archive` | `known_collection` 精确枚举 | 明确禁止 |
 |---|---|---|---|---|
 | 普通网页 | Jina Reader `https://r.jina.ai/<URL>`；需图片/格式控制时用 Web Reader | 把同一已知 URL 的 Markdown、文本、HTML 或用户明确指定的原始 HTTP 响应写入新文件 | URL 文件逐行处理；不从网页继续提取站内链接 | 站点爬取、sitemap 扩展、搜索结果页扩展、相似链接 |
+| Twitter/X | `python3 ~/.agents/skills/yichen-content-archive/scripts/x_known_url.py "<URL>"`；固定匿名 FxTwitter → Jina。Post 保留正文/作者/指标，Quote 同时保留引用对象，Article 先精确定位父推文再还原 Markdown 正文 | 只把同一已知链接的 JSON/Markdown 写入新产物；媒体下载不在本适配器范围 | 只接受用户给出的 URL 文件逐行处理；不得枚举作者主页、线程回复、书签或推荐 | 关键词搜索；把 Article ID 搜索结果扩展成候选；未经当轮授权调用 OpenCLI/xreach |
 | 小红书 | `$yichen-xiaohongshu-fetch` 的 `fetch.py <URL> <dir> --skip-media` | 同一 Skill 的已知笔记下载；只有当轮授权后才可 `--use-cookie` | 只接受已经给出的 URL 文件，不枚举用户主页或收藏 | 搜索笔记、作者发现、从收藏页扩展 |
 | 抖音 | `$yichen-douyin-fetcher` 的 `download.py <URL> --metadata-only` | 同一 Skill 的已知视频下载 | 只接受已经给出的 URL 文件，不枚举账号或收藏 | 搜索、推荐页采样、账号发现 |
 | 微信公众号 | 单个已知 URL 用 `$yichen-wechat-mp-batch-exporter` 读取；本地归档也可用 `~/.agents/skills/yichen-content-archive/scripts/wechat_mp_local.py download` | 已知 URL 文件用同一 Skill 的 `download_urls.py` 或本机脚本 | 对用户精确指定的公众号名称/容器，当轮授权后用本机 `wechat_mp_local.py search --allow-local-account-session --account "<EXACT_ACCOUNT>" --limit-per-account N --download` 枚举并归档 | 跨公众号关键词搜索、模糊账号扩展、增强指标、评论、代理；任何微信 UI 代操作 |
@@ -17,6 +18,9 @@
 - 短链接的单次规范化或跟随重定向属于已知链接解析，不得借机抓取推荐列表。
 - `known_collection` 必须先写固定清单，并记录容器引用、用户指定上限、实际条数和是否截断。清单条目不能继续扩展子来源。
 - URL 文件属于用户已提供的精确清单，不运行链接发现器或站内爬虫。
+- X 的 `/i/article/<ARTICLE_ID>` 不直接交给 Jina；先用 FxTwitter `/2/search` 对该 ID 做最多 10 条的一次查询，只接受 `article.id` 精确相等的父推文，再请求 `/2/status/<PARENT_ID>`。该查询只用于对象解析，输出中不得保留或归档其他结果。
+- X Article 通常以 `x.com/<handle>/status/<STATUS_ID>` 分享；请求该 status 后只要返回内嵌 `article` 对象，就直接判定为 Article，不再做 Article ID 搜索。若正文块不完整，匿名 Jina 和授权后的 OpenCLI 都使用该父 Status URL。
+- X 匿名链成功即停止。匿名失败或 Article 正文缺失时，先说明具体缺口；取得当前链接的当轮授权后，Post/Quote 才可运行 `opencli twitter thread "<STATUS_URL>" --limit 1 -f json`，Article 才可运行 `opencli twitter article "<PARENT_STATUS_URL>" -f md`，仍失败再运行 `xreach --cookie-source chrome --json tweet "<STATUS_URL>"`。不得读取 Feed、评论线程、书签、通知或私信。
 - 微信公众号历史只允许精确账号容器和本机 `127.0.0.1:18901` exporter，并要求当轮 `--allow-local-account-session` 授权。登录失效时等待用户本人完成本地页面扫码/手机确认；不得操控微信客户端，不进入代理、评论或阅读量分支。
 - YouTube 只能使用已知 URL/播放列表路径；即使目标 Skill 同时支持搜索，也不得调用 `search` 或 `channel`。
 - B站公开内容匿名优先。高画质、高码率、4K/HDR/杜比、会员/已购/地区年龄限制、私人数据或明确要求登录的字幕，必须说明具体目标和原因，取得当轮 Cookie 授权；普通 412 不自动升级为登录态。

@@ -15,7 +15,7 @@ description: 逸尘自用的统一网页与社交平台搜索编排器。用于�
 4. 不下载媒体、不归档、不建立长期数据库、不运行定时监控。用户要读取、下载、转写或归档已审核 URL 清单时，交给 `$yichen-content-archive` 并重新确认动作与范围。
 5. 不绕过验证码、登录墙、限流或风控。缺失字段写 `null`，零结果只表示本次后端未返回候选。
 6. 用户直接给出已知 URL、URL 文件，或要求读取/下载/归档已确认候选时，停止搜索并交给 `$yichen-content-archive`。只有用户明确要求“搜索引用、讨论或关联这个 URL 的其他公开内容”时，才把 URL 标记为 `--input-kind url-seed`；该模式只把 URL 当发现线索，不读取或归档 URL 本身。
-7. 搜索词、候选核验 URL 和垂直参数会发给 AnySearch。不得提交密码、Cookie、个人数据、商业秘密或其他敏感查询。
+7. 公共网页搜索词、候选核验 URL 和垂直参数会发给 AnySearch；X 公共搜索词首先发给官方 Grok CLI 原生 `x_search`，只有明确额度耗尽时才会发给匿名 FxTwitter。不得提交密码、Cookie、个人数据、商业秘密或其他敏感查询。
 
 ## 路由
 
@@ -48,7 +48,7 @@ python3 ~/.agents/skills/yichen-unified-search/scripts/route_search.py \
 ## 登录与安全门
 
 - 小红书、抖音站内搜索：执行前说明平台、原始关键词和预计条数，取得用户当轮明确授权读取 Chrome 登录态；一次授权不扩展到其他关键词、平台或后续任务。
-- Twitter/X：先检查 Grok CLI OAuth；已登录时优先使用 `$yichen-grok-consult`。若主路由不可用，可按 OpenCLI → xreach 的只读顺序回退；进入浏览器登录态适配器前必须按对应工具提示取得当轮授权。认证失败、401/403 或权限错误时停止，不得改读其他私人状态。
+- Twitter/X：所有关键词搜索第一层固定为官方 Grok CLI 账号 OAuth + 原生 `x_search`。只有输出明确证明账号额度或使用上限耗尽时，才进入匿名 FxTwitter；未登录、401/403、权限、输入、超时、网络和服务错误都必须停止，不能冒充额度错误。FxTwitter 仍失败或零结果时，才按既有只读链进入 OpenCLI → xreach；只有明确进入浏览器登录态适配器时，才按对应工具提示取得当轮授权。
 - B站、YouTube、微信、今日头条和小宇宙公共发现：先匿名。出现登录限定时停止；本 Skill 不升级为登录读取。
 - AnySearch API Key：匿名额度可直接使用。收到新 Key 时先询问，用户明确同意后才能保存；不要让用户在聊天中粘贴 Key。
 
@@ -56,7 +56,7 @@ python3 ~/.agents/skills/yichen-unified-search/scripts/route_search.py \
 
 1. 复述范围：关键词、平台、时间范围、条数、是否需要原生站内覆盖。
 2. 运行 `route_search.py`；检查 `status`、`authorization`、`steps` 和 `limitations`。
-3. 多后端或登录态任务直接运行 `python3 ~/.agents/skills/yichen-web-research/scripts/doctor_yichen.py`，不要回调总路由 Skill；OpenCLI 路线再运行 `opencli doctor`。只把真实体检结果视为可用性，不把命令存在当成可用。
+3. X 搜索先运行 `python3 ~/.agents/skills/yichen-web-research/scripts/doctor_yichen.py`，确认 `$yichen-grok-consult`、Grok CLI OAuth 与原生 `x_search` 可用，再调用该工具。工具内部固定执行 Grok CLI → 仅明确额度耗尽时 FxTwitter → OpenCLI → xreach；不得因零结果、超时、网络或服务错误提前跳到 FxTwitter。其他多后端或登录态任务也运行该 doctor；OpenCLI 路线再运行 `opencli doctor`。不要回调总路由 Skill，也不要把命令存在当成可用。
 4. 仅调用计划中的既有后端。AnySearch 从 `~/.agents/skills/anysearch/runtime.conf` 读取当前 `Command`，不要复制 CLI，也不要硬编码代理或 Key。
 5. 把每个后端输出映射到 [references/candidate-schema.md](references/candidate-schema.md)；保持原始 URL、来源平台、后端和限制。
 6. 先 URL 去重，再按标题/作者/发布时间做近重复合并；不要把互动量当成事实正确性。

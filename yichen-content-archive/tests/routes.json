@@ -29,6 +29,24 @@
     "allowed_branch": "provided-lines-only"
   },
   {
+    "case": "known_x_status_read",
+    "input_kind": "known_urls",
+    "platform": "x",
+    "action": "read",
+    "decision": "route",
+    "route_backend": "x-public-known-url",
+    "allowed_branch": "anonymous-post-or-quote"
+  },
+  {
+    "case": "known_x_article_read",
+    "input_kind": "known_urls",
+    "platform": "x",
+    "action": "read",
+    "decision": "route",
+    "route_backend": "x-public-known-url",
+    "allowed_branch": "exact-article-parent"
+  },
+  {
     "case": "known_xiaohongshu_read",
     "input_kind": "known_urls",
     "platform": "xiaohongshu",

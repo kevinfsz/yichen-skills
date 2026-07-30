@@ -1,11 +1,11 @@
 ---
 name: yichen-content-archive
-description: 读取、下载并归档用户已提供的普通网页、小红书、抖音、微信公众号、YouTube、B站和小宇宙链接、URL 文件、上游已确认候选或用户明确指定的 known_collection；可对已知 URL 清单、YouTube/B站播放列表、已知小宇宙播客清单和已知公众号历史做精确容器枚举后归档。用于“把这些已知链接读一下/下载/归档”“归档这个明确播放列表/播客清单/公众号历史”等已有明确输入的任务；不得用于关键词搜索、站点爬取、账号/频道发现、相似推荐、跨来源扩展、私人收藏导出或未确认候选扩展。
+description: 读取、下载并归档用户已提供的普通网页、Twitter/X 推文与 Article、小红书、抖音、微信公众号、YouTube、B站和小宇宙链接、URL 文件、上游已确认候选或用户明确指定的 known_collection；可对已知 URL 清单、YouTube/B站播放列表、已知小宇宙播客清单和已知公众号历史做精确容器枚举后归档。用于“把这些已知链接读一下/下载/归档”“读取这条 X 推文或 X Article”“归档这个明确播放列表/播客清单/公众号历史”等已有明确输入的任务；不得用于关键词搜索、站点爬取、账号/频道发现、相似推荐、跨来源扩展、私人收藏导出或未确认候选扩展。
 ---
 
 # 已知内容归档
 
-只编排现有平台 Skill。不要复制、改写或内嵌平台解析、认证、下载代码。
+优先编排现有平台 Skill；X 已知链接使用本 Skill 的固定只读公共适配器。不要复制其他 Skill 的搜索、认证或下载实现。
 
 ## 入口闸门
 
@@ -31,6 +31,7 @@ description: 读取、下载并归档用户已提供的普通网页、小红书�
 6. 不得打印或写入普通日志中的 Cookie、Token、登录凭证或带敏感查询参数的完整 URL。
 7. 不得绕过登录、验证码、付费墙、删除状态、地区限制或访问控制。
 8. 微信公众号路线只处理已知公开文章 URL 或用户明确指定的公众号历史容器；绝对不得操控微信客户端。若本地 exporter 登录失效，只能说明用户需本人完成本地页面扫码与手机确认并等待其回复，不得代替点击、扫码或确认。
+9. Twitter/X 已知链接先走 FxTwitter → Jina 匿名公共读取。只有匿名路线失败或 Article 正文不完整时，才列出 OpenCLI → xreach 回退；执行任何一个登录态回退前必须针对当前链接取得当轮明确授权。
 
 ## 执行流程
 
@@ -52,6 +53,7 @@ description: 读取、下载并归档用户已提供的普通网页、小红书�
 完整读取 [references/platform-routes.md](references/platform-routes.md)，再读取表中指定的现有平台 Skill、参考文件或脚本帮助。只调用允许的已知链接/精确容器路径：
 
 - 普通网页：Jina Reader / Web Reader；只读用户给出的 HTTP(S) URL，不做站点爬取。
+- Twitter/X：本 Skill `x_known_url.py` 识别已知 Post、Quote 与 Article；匿名 FxTwitter 优先，必要时匿名 Jina，登录态 OpenCLI/xreach 只作授权后的回退。
 - 小红书：`$yichen-xiaohongshu-fetch`
 - 抖音：`$yichen-douyin-fetcher`
 - 微信公众号：单篇与已知 URL 文件归档用 `$yichen-wechat-mp-batch-exporter` 或本机 `wechat_mp_local.py`；已知公众号历史只走本机精确容器路线，并在当轮授权后传入 `--allow-local-account-session`。
@@ -75,6 +77,7 @@ description: 读取、下载并归档用户已提供的普通网页、小红书�
 
 只使用本 Skill `scripts/` 下的安全执行器，不直接调用旧同名脚本：
 
+- `x_known_url.py`：只接受 `x.com`/`twitter.com` 的 status 或 `/i/article/` URL；status 返回内嵌 `article` 对象时自动判定为 Article，只有直接输入 `/i/article/<ID>` 时才在 FxTwitter 搜索结果中精确匹配 `article.id` 定位父推文。这属于解析已知对象，不得扩展其他候选。默认不使用任何登录态；匿名不完整时仅输出授权回退计划。
 - `xiaoyuzhou_stepfun.py`：默认 episode 目录已存在时自动创建 `-run-N` 新目录；`--resume` 只复用 `source.json`、文件大小和 SHA-256 全部一致的产物，绝不重写 `source.json`。用户显式指定的单集输出目录已存在时默认拒绝。
 - `xiaoyuzhou_opencli.py`：默认排他创建输出目录与清单文件。Agent 禁止自动使用兼容 `--overwrite`；只有用户当轮明确点名覆盖同一绝对目录，并同时提供独立的 `--confirm-overwrite-exact-dir <绝对路径>` 高摩擦确认后，包装器才接受。
 - `wechat_mp_local.py`：用户指定的输出目录已存在时默认拒绝。需要续跑时显式传 `--resume-existing --output-dir <既有目录>`；既有目录只作为只读 checkpoint，待处理项写入同级新的 `<name>-resume-<run_id>` 目录，不在旧 run 内新增或修改文件。

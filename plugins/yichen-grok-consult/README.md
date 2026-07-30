@@ -8,12 +8,12 @@ This is an unofficial community plugin. It is not affiliated with, endorsed by, 
 
 ## What it provides
 
-- `search_x_with_grok`: launches the official Grok Build CLI with native `x_search`, extracts public X status URLs, deterministically decodes the timestamps embedded in their Snowflake IDs, converts time zones, and filters a rolling window or fixed date.
+- `search_x_with_grok`: launches the official Grok Build CLI with native `x_search`. Only explicit account-quota exhaustion can activate anonymous FxTwitter; an empty or failed FxTwitter result can then continue to read-only OpenCLI and xreach. The tool extracts public X status URLs, decodes Snowflake timestamps, converts time zones, and filters a rolling window or fixed date.
 - `ask_grok`: asks Grok for an independent answer.
 - `review_with_grok`: asks Grok to review a draft or analysis.
 - `challenge_with_grok`: asks Grok to stress-test a claim.
 
-The three non-search tools use a local OpenCodex Responses endpoint. The X search tool uses the official Grok Build CLI directly.
+All four tools use the official Grok Build CLI and account OAuth. OpenCLI and xreach are X-only read-only fallbacks; they never replace Grok for ordinary consultation.
 
 ## Requirements
 
@@ -21,7 +21,7 @@ The three non-search tools use a local OpenCodex Responses endpoint. The X searc
 - Node.js 18 or newer.
 - Official [Grok Build CLI](https://docs.x.ai/build/overview), installed at `~/.grok/bin/grok` or configured through `GROK_CONSULT_CLI`.
 - A valid Grok Build login created with `grok login`.
-- Optional: a local OpenCodex service for `ask_grok`, `review_with_grok`, and `challenge_with_grok`.
+- Optional for X fallback only: the sibling `yichen-unified-search` Skill with `fxtwitter_search.py`, plus OpenCLI and xreach. These routes are used only under the documented fallback rules.
 
 Official Grok Build installation at the time of publication:
 
@@ -52,9 +52,11 @@ Supported environment variables:
 | `GROK_CONSULT_CLI` | Absolute path to the official Grok CLI when it is not at `~/.grok/bin/grok` |
 | `GROK_CONSULT_SEARCH_TIMEOUT_MS` | Native-search timeout, bounded to 10–630 seconds |
 | `GROK_CONSULT_SEARCH_MAX_TURNS` | Native-search turn limit, bounded to 1–60 |
-| `GROK_CONSULT_ENDPOINT` | Loopback-only OpenCodex Responses endpoint |
-| `GROK_CONSULT_MODEL` | Allowlisted xAI model used by the non-search consultation tools |
-| `GROK_CONSULT_TIMEOUT_MS` | Non-search consultation timeout |
+| `GROK_CONSULT_PYTHON` | Absolute Python executable used by the FxTwitter adapter |
+| `GROK_CONSULT_FXTWITTER_ADAPTER` | Absolute path to `fxtwitter_search.py` if the sibling Skill is installed elsewhere |
+| `GROK_CONSULT_OPENCLI` | Absolute path to OpenCLI |
+| `GROK_CONSULT_XREACH` | Absolute path to xreach |
+| `GROK_CONSULT_LOCAL_READER_TIMEOUT_MS` | Local-reader timeout, bounded to 10–180 seconds |
 
 If your network requires a proxy, add `HTTP_PROXY`, `HTTPS_PROXY`, and related variables only to your private local MCP environment. Do not commit proxy credentials.
 
@@ -65,6 +67,8 @@ If your network requires a proxy, add `HTTP_PROXY`, `HTTPS_PROXY`, and related v
 - Only `x_search`, `web_search`, and `web_fetch` are enabled for search. MCP access, local file tools, shell access, memory, subagents, and plan mode are disabled.
 - The real Grok authentication file is referenced through `GROK_AUTH_PATH`; it is not copied into this repository or returned in tool output.
 - The tool verifies at least one completed `XSearch` by reading the isolated session transcript. It does not trust a prose claim that a search occurred.
+- Authentication, 401/403, permission, invalid-request, timeout, network, service, zero-result, or unverified-search errors do not qualify for FxTwitter fallback. Only explicit Grok account-quota or usage-limit exhaustion does.
+- FxTwitter receives only the public query and no X cookies. OpenCLI and xreach may use local X session state, so keep them read-only and obtain any authorization required by the calling workflow.
 - Queries, results, and session transcripts remain under the isolated Grok home and may also be processed by xAI. The plugin performs no automatic cleanup.
 - The public result omits the user's absolute transcript path.
 
@@ -80,9 +84,11 @@ If your network requires a proxy, add `HTTP_PROXY`, `HTTPS_PROXY`, and related v
 ```text
 GPT-led Codex task
   -> local MCP server
-  -> isolated official Grok Build CLI session
+  -> isolated official Grok Build CLI session (always first)
   -> native XSearch / supporting web tools
-  -> transcript proof of completed XSearch
+  -> on explicit account-quota exhaustion only:
+       anonymous FxTwitter -> OpenCLI -> xreach
+  -> native transcript proof or local read-only route proof
   -> URL extraction + Snowflake time decoding
   -> structured result returned to GPT
 ```

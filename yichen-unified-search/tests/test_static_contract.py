@@ -30,6 +30,9 @@ class StaticContractTests(unittest.TestCase):
             "doctor_yichen.py",
             "$yichen-content-archive",
             "本次搜索所得候选",
+            "官方 Grok CLI",
+            "明确额度耗尽",
+            "FxTwitter",
         )
         for phrase in required:
             with self.subTest(phrase=phrase):
@@ -48,6 +51,13 @@ class StaticContractTests(unittest.TestCase):
         for forbidden in ("requests", "urllib", "http.client", "subprocess"):
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden, text)
+
+    def test_fxtwitter_adapter_is_a_separate_runtime_step(self):
+        adapter = ROOT / "scripts" / "fxtwitter_search.py"
+        self.assertTrue(adapter.is_file())
+        source = adapter.read_text(encoding="utf-8")
+        self.assertIn("https://api.fxtwitter.com/2/search", source)
+        self.assertIn("no automatic pagination or retry", source)
 
     def test_frontmatter_does_not_trigger_on_known_url_reading(self):
         text = SKILL.read_text(encoding="utf-8")

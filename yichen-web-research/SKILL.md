@@ -23,7 +23,7 @@ description: 逸尘自用的互联网研究总入口。用于跨平台且跨阶�
 | 用户意图 | 目标 Skill |
 |---|---|
 | 关键词搜索、批量发现、平台站内搜索、候选核验 | `$yichen-unified-search` |
-| 已知 URL、URL 文件、已确认候选或明确容器的读取、下载、归档 | `$yichen-content-archive` |
+| 已知 URL、URL 文件、已确认候选或明确容器的读取、下载、归档（含 X Post、Quote、Article） | `$yichen-content-archive` |
 | 导出小红书、抖音或 X/Twitter 的私人收藏与书签链接 | `$yichen-bookmarks-export` |
 | 已有音视频的字幕、ASR、口播粗剪或内容分析 | `$yichen-asr` |
 
@@ -43,6 +43,7 @@ description: 逸尘自用的互联网研究总入口。用于跨平台且跨阶�
 ## 后端定位
 
 - AnySearch：公共网页、批量搜索、垂直搜索和搜索候选的轻量原文核验。
+- Twitter/X：关键词搜索交给 `$yichen-unified-search`，固定 Grok CLI 原生 `x_search` 优先；已知 X URL 交给 `$yichen-content-archive`，固定匿名 FxTwitter → Jina 优先。
 - 平台原生 CLI/API：GitHub、YouTube、B站等结构化公共搜索。
 - OpenCLI：仅作为部分平台的只读适配器，不是本体系的强制依赖或总入口。
 - 本地平台 Skill：已知链接解析、媒体下载、公众号正文和批量归档。

@@ -165,6 +165,39 @@ def native_steps(platform: str, request: Request) -> list[dict]:
     query = request.queries[0]
     limit = request.limit
     days = request.days if request.days is not None else 1
+    if platform == "x":
+        arguments: dict[str, object] = {
+            "query": query,
+            "max_results": limit,
+        }
+        if request.days not in {None, 0}:
+            arguments["hours"] = request.days * 24
+        return [
+            {
+                "action": "invoke_plugin_tool",
+                "backend": "grok-consult",
+                "tool": "search_x_with_grok",
+                "arguments": arguments,
+                "primary_route": "official_grok_cli_account_quota",
+                "account_oauth_used": True,
+                "contains_read_only_chain": [
+                    "official_grok_cli_account_quota",
+                    "fxtwitter-public",
+                    "opencli",
+                    "xreach",
+                ],
+                "fxtwitter_when": "explicit_account_quota_exhausted_only",
+                "must_stop_without_fallback_when": [
+                    "authentication_error",
+                    "authorization_error",
+                    "invalid_request",
+                    "timeout",
+                    "network_error",
+                    "service_error",
+                    "unverified_native_search",
+                ],
+            },
+        ]
     commands = {
         "github": ["gh", "search", "repos", query, "--limit", str(limit)],
         "wechat": [
@@ -219,7 +252,6 @@ def native_steps(platform: str, request: Request) -> list[dict]:
             "-f",
             "yaml",
         ],
-        "x": ["grok-consult/search_x_with_grok", query],
         "bilibili": [
             "bili",
             "search",
@@ -421,7 +453,15 @@ def plan(request: Request) -> dict:
     if platform == "toutiao":
         limitations.append("Single keyword, low frequency, current public non-video results only.")
     if platform == "x":
-        limitations.append("Check Grok OAuth first; stop on auth or permission errors.")
+        limitations.extend(
+            [
+                "Every X keyword search starts with official Grok CLI account OAuth and native x_search.",
+                "Only explicit Grok account quota or usage-limit exhaustion may enter anonymous FxTwitter.",
+                "Authentication, authorization, timeout, network, service, zero-result, and unverified-search failures must stop without FxTwitter fallback.",
+                "After an eligible quota fallback, FxTwitter remains a third-party public index and is not an official or exhaustive X search.",
+                "Stop and request authorization before any fallback reads a browser login state.",
+            ]
+        )
 
     return {
         "schema_version": "1.0",
@@ -431,8 +471,12 @@ def plan(request: Request) -> dict:
             "platform": platform,
             "backend": backend,
             "mode": "search",
-            "reason": "platform_native_search",
-            "login_state_used": platform in {"xiaohongshu", "douyin"},
+            "reason": (
+                "grok_native_x_search_primary"
+                if platform == "x"
+                else "platform_native_search"
+            ),
+            "login_state_used": platform in {"xiaohongshu", "douyin", "x"},
         },
         "steps": native_steps(platform, request),
         "limitations": limitations,

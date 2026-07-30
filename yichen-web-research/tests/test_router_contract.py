@@ -35,6 +35,7 @@ class RouterContractTests(unittest.TestCase):
             "wechat_mp_local.py",
             "xiaoyuzhou_stepfun.py",
             "xiaoyuzhou_opencli.py",
+            "x_known_url.py",
         ):
             self.assertTrue((archive_scripts / name).is_file())
             self.assertFalse((router_scripts / name).exists())
@@ -52,6 +53,13 @@ class RouterContractTests(unittest.TestCase):
         )
         self.assertIn("不下载媒体、不归档", search)
         self.assertIn("不得执行关键词搜索", archive)
+
+    def test_x_search_and_known_url_have_separate_children(self) -> None:
+        router = (ROOT / "yichen-web-research/SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("Grok CLI 原生 `x_search` 优先", router)
+        self.assertIn("匿名 FxTwitter → Jina 优先", router)
 
     def test_asr_uses_unified_child_route(self) -> None:
         router = (ROOT / "yichen-web-research/SKILL.md").read_text(

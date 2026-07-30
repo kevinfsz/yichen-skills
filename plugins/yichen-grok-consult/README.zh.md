@@ -8,12 +8,12 @@
 
 ## 提供的工具
 
-- `search_x_with_grok`：启动官方 Grok Build CLI 的原生 `x_search`，提取公开 X status URL，还原 Snowflake 编号中的时间，转换时区并按滚动窗口或固定日期过滤。
+- `search_x_with_grok`：启动官方 Grok Build CLI 的原生 `x_search`。只有明确的账号额度耗尽才能进入匿名 FxTwitter；FxTwitter 失败或零结果后才继续只读 OpenCLI 和 xreach。工具会提取公开 X status URL，还原 Snowflake 编号中的时间，转换时区并按滚动窗口或固定日期过滤。
 - `ask_grok`：让 Grok 独立回答问题。
 - `review_with_grok`：让 Grok 审阅草稿或分析。
 - `challenge_with_grok`：让 Grok 反驳和压力测试某个判断。
 
-三个非搜索工具通过本机 OpenCodex Responses 端点调用 Grok；X 搜索工具直接调用官方 Grok Build CLI。
+四个工具全部通过官方 Grok Build CLI 和账号 OAuth 调用 Grok。OpenCLI 与 xreach 只作为 X 搜索的只读末级回退，不能代替普通 Grok 咨询。
 
 ## 环境要求
 
@@ -21,7 +21,7 @@
 - Node.js 18 或更高版本。
 - 官方 [Grok Build CLI](https://docs.x.ai/build/overview)，默认位于 `~/.grok/bin/grok`，也可通过 `GROK_CONSULT_CLI` 指定。
 - 已执行 `grok login` 并保持有效登录。
-- 可选：非搜索咨询工具需要本机 OpenCodex 服务。
+- X 回退可选依赖：同级 `yichen-unified-search` Skill 中的 `fxtwitter_search.py`，以及 OpenCLI、xreach。只有满足文档中的回退条件时才会使用。
 
 本文发布时，xAI 官方安装方式为：
 
@@ -50,9 +50,11 @@ codex plugin add yichen-grok-consult@yichen-skills
 | `GROK_CONSULT_CLI` | 官方 Grok CLI 不在默认位置时，指定其绝对路径 |
 | `GROK_CONSULT_SEARCH_TIMEOUT_MS` | 原生搜索超时，限制在 10–630 秒 |
 | `GROK_CONSULT_SEARCH_MAX_TURNS` | 原生搜索最大轮数，限制在 1–60 |
-| `GROK_CONSULT_ENDPOINT` | 仅允许回环地址的 OpenCodex Responses 端点 |
-| `GROK_CONSULT_MODEL` | 非搜索咨询工具使用的 allowlist xAI 模型 |
-| `GROK_CONSULT_TIMEOUT_MS` | 非搜索咨询超时 |
+| `GROK_CONSULT_PYTHON` | FxTwitter 适配器使用的 Python 绝对路径 |
+| `GROK_CONSULT_FXTWITTER_ADAPTER` | 同级 Skill 不在默认位置时，指定 `fxtwitter_search.py` 的绝对路径 |
+| `GROK_CONSULT_OPENCLI` | OpenCLI 绝对路径 |
+| `GROK_CONSULT_XREACH` | xreach 绝对路径 |
+| `GROK_CONSULT_LOCAL_READER_TIMEOUT_MS` | 本地读取器超时，限制在 10–180 秒 |
 
 如果网络需要代理，只在自己的本机 MCP 环境中配置 `HTTP_PROXY`、`HTTPS_PROXY` 等变量，不要提交代理凭证。
 
@@ -63,6 +65,8 @@ codex plugin add yichen-grok-consult@yichen-skills
 - 搜索时只开放 `x_search`、`web_search` 和 `web_fetch`；关闭 MCP、本地文件、Shell、记忆、子代理和计划模式。
 - 真实 Grok 登录文件只通过 `GROK_AUTH_PATH` 引用，不复制进仓库，也不在工具输出中返回。
 - MCP 会读取隔离会话记录，确认至少一次 `XSearch` 已完成，不相信 Grok 文字里的“我已经搜索”。
+- 未登录、401/403、权限、输入、超时、网络、服务、零结果或搜索证据不可核验都不属于额度耗尽；只有明确的 Grok 账号额度或使用上限耗尽才能触发 FxTwitter。
+- FxTwitter 只接收公开关键词，不接收 X Cookie。OpenCLI 与 xreach 可能使用本机 X 会话，必须保持只读，并遵守上层工作流的当轮授权要求。
 - 查询、结果和会话记录会留在隔离 Grok 目录，也可能由 xAI 处理；插件不会自动清理。
 - 对外返回结果不包含用户的绝对 transcript 路径。
 
@@ -78,9 +82,11 @@ codex plugin add yichen-grok-consult@yichen-skills
 ```text
 GPT 主导的 Codex 任务
   -> 本地 MCP 服务
-  -> 隔离的官方 Grok Build CLI 会话
+  -> 隔离的官方 Grok Build CLI 会话（始终第一层）
   -> 原生 XSearch / 辅助网页搜索
-  -> 核验 XSearch 完成记录
+  -> 仅明确账号额度耗尽时：
+       匿名 FxTwitter -> OpenCLI -> xreach
+  -> 核验 XSearch 完成记录或本地只读路线
   -> 提取 URL + 还原 Snowflake 时间
   -> 把结构化结果交回 GPT
 ```
